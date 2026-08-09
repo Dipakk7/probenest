@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
@@ -116,3 +116,23 @@ class RedTeamResultModel(Base):
     evidence_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     run: Mapped["RedTeamRunModel"] = relationship("RedTeamRunModel", back_populates="results")
+
+
+class RunScoreModel(Base):
+    """Database model for calculated run scores."""
+
+    __tablename__ = "run_scores"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    target: Mapped[str] = mapped_column(String(64), default="demorrag", nullable=False)
+    quality_score: Mapped[float] = mapped_column(Float, nullable=False)
+    security_score: Mapped[float] = mapped_column(Float, nullable=False)
+    overall_score: Mapped[float] = mapped_column(Float, nullable=False)
+    policy_json: Mapped[str] = mapped_column(Text, nullable=False)
+    metrics_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        nullable=False,
+    )

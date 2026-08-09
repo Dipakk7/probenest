@@ -11,40 +11,50 @@ from app.domain.target import TargetAdapter
 from app.evaluators.exact_match import ExactMatchEvaluator
 from app.loaders.dataset import DatasetLoader
 from app.repositories.evaluation_repository import EvaluationRepository
+from app.repositories.score_repository import ScoreRepository
 from app.runner.runner import EvaluationRunner
+from app.scoring.engine import ScoreEngine
 
 
 class EvaluationService:
-    """High-level application service managing evaluation workflows and database persistence."""
+    """High-level application service managing evaluation workflows, scores, and database persistence."""
 
     def __init__(self, db: Session) -> None:
+        self.db = db
         self.repository = EvaluationRepository(db)
+        self.score_repo = ScoreRepository(db)
+        self.score_engine = ScoreEngine()
 
     def run_evaluation(
         self,
         dataset_path_or_cases: str | Path | Sequence[EvaluationCase],
         target_adapter: TargetAdapter | None = None,
         evaluators: Sequence[Evaluator] | None = None,
+        target_name: str = "demorrag",
         run_id: str | None = None,
     ) -> EvaluationRun:
-        """Load dataset, execute evaluation runner, persist run details, and return completed EvaluationRun."""
-
-        # 1. Load dataset cases
+        """Load dataset, execute evaluation runner, calculate run score, persist run details, and return completed EvaluationRun."""
         if isinstance(dataset_path_or_cases, (str, Path)):
             cases = DatasetLoader.load_from_file(dataset_path_or_cases)
         else:
             cases = list(dataset_path_or_cases)
 
-        # 2. Default adapter and evaluators if not provided
         adapter = target_adapter or MockTargetAdapter()
         evals = evaluators or [ExactMatchEvaluator()]
 
-        # 3. Instantiate runner and execute
         runner = EvaluationRunner(target_adapter=adapter, evaluators=evals)
         run_result = runner.run(cases=cases, run_id=run_id)
 
-        # 4. Persist to database
         saved_run = self.repository.save_run(run_result)
+
+        # Calculate and persist run score
+        run_score = self.score_engine.calculate_run_score(
+            run_id=saved_run.run_id,
+            target=target_name,
+            quality_results=saved_run.results,
+        )
+        self.score_repo.save_score(run_score)
+
         return saved_run
 
     def get_run(self, run_id: str) -> EvaluationRun | None:

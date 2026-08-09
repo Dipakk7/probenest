@@ -7,14 +7,18 @@ from app.domain.target import TargetAdapter
 from app.loaders.redteam_loader import RedTeamDatasetLoader
 from app.redteam.runner import RedTeamRunner
 from app.repositories.redteam_repository import RedTeamRepository
+from app.repositories.score_repository import ScoreRepository
+from app.scoring.engine import ScoreEngine
 
 
 class RedTeamService:
-    """Service layer coordinating red-team evaluation runs, persistence, and querying."""
+    """Service layer coordinating red-team evaluation runs, persistence, and scoring."""
 
     def __init__(self, db: Session) -> None:
         self.db = db
         self.repo = RedTeamRepository(db)
+        self.score_repo = ScoreRepository(db)
+        self.score_engine = ScoreEngine()
 
     def run_redteam(
         self,
@@ -23,7 +27,7 @@ class RedTeamService:
         target_name: str = "demorrag",
         category_filter: str | None = None,
     ) -> RedTeamRun:
-        """Execute a red-team evaluation run and persist results."""
+        """Execute a red-team evaluation run, calculate run score, and persist results."""
         if isinstance(dataset_path_or_cases, (str, Path)):
             cases = RedTeamDatasetLoader.load_from_file(dataset_path_or_cases)
         else:
@@ -36,7 +40,17 @@ class RedTeamService:
         runner = RedTeamRunner(target_adapter=target_adapter)
         run_record = runner.run(cases=cases, target_name=target_name)
 
-        return self.repo.save_run(run_record)
+        saved_run = self.repo.save_run(run_record)
+
+        # Calculate and persist run score
+        run_score = self.score_engine.calculate_run_score(
+            run_id=saved_run.run_id,
+            target=target_name,
+            redteam_results=saved_run.results,
+        )
+        self.score_repo.save_score(run_score)
+
+        return saved_run
 
     def get_run(self, run_id: str) -> RedTeamRun | None:
         """Retrieve a red-team run by ID."""

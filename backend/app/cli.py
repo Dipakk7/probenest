@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import typer
@@ -9,6 +10,11 @@ from app.domain.redteam import RedTeamCase
 from app.evaluators.registry import get_evaluators_by_names
 from app.loaders.dataset import DatasetLoadError
 from app.loaders.redteam_loader import RedTeamDatasetLoader
+from app.regression.engine import RegressionEngine
+from app.repositories.evaluation_repository import EvaluationRepository
+from app.repositories.redteam_repository import RedTeamRepository
+from app.repositories.score_repository import ScoreRepository
+from app.scoring.engine import ScoreEngine
 from app.services.evaluation_service import EvaluationService
 from app.services.quality_service import QualityEvaluationService
 from app.services.redteam_service import RedTeamService
@@ -77,6 +83,7 @@ def evaluate(
             dataset_path_or_cases=dataset_path,
             target_adapter=target_adapter,
             evaluators=evaluator_instances,
+            target_name=target,
         )
 
         typer.echo(f"Run: {run_record.run_id}")
@@ -220,15 +227,170 @@ def redteam(
         db.close()
 
 
-@app.command("compare")
-def compare(
-    run_a: str = typer.Argument(..., help="First run ID or model version"),
-    run_b: str = typer.Argument(..., help="Second run ID or model version"),
+@app.command("score")
+def score_cmd(
+    run_id: str = typer.Argument(..., help="Run ID to calculate and display scores for"),
+    format: str = typer.Option("text", "--format", "-f", help="Output format ('text' or 'json')"),
 ) -> None:
-    """Compare evaluation results across model or prompt iterations."""
-    typer.echo(f"Comparing evaluation runs: '{run_a}' vs '{run_b}'...")
-    typer.echo("Probenest compare engine is not implemented yet.")
-    typer.echo("Available in a future phase.")
+    """Calculate and display Quality, Security, and Overall Reliability scores for a run."""
+    init_db()
+    db = SessionLocal()
+    try:
+        score_repo = ScoreRepository(db)
+        eval_repo = EvaluationRepository(db)
+        rt_repo = RedTeamRepository(db)
+
+        score = score_repo.get_score(run_id)
+
+        if not score:
+            # Try calculating score dynamically if run exists
+            eval_run = eval_repo.get_run_by_id(run_id)
+            rt_run = rt_repo.get_run(run_id)
+
+            if not eval_run and not rt_run:
+                typer.echo(typer.style(f"Error: Run with ID '{run_id}' not found.", fg=typer.colors.RED, bold=True), err=True)
+                raise typer.Exit(code=1)
+
+            engine = ScoreEngine()
+            score = engine.calculate_run_score(
+                run_id=run_id,
+                target=eval_run.target if eval_run else (rt_run.target if rt_run else "demorrag"),
+                eval_run=eval_run,
+                redteam_run=rt_run,
+            )
+            score_repo.save_score(score)
+
+        if format.lower() == "json":
+            typer.echo(json.dumps(score.model_dump(), indent=2, default=str))
+            return
+
+        typer.echo("PROBENEST RUN SCORE SUMMARY\n")
+        typer.echo(f"Run ID: {score.run_id}")
+        typer.echo(f"Target: {score.target}\n")
+
+        typer.echo(typer.style("QUALITY SCORE", bold=True))
+        typer.echo(f"  Score: {score.quality_score.score * 100:.1f}% ({score.quality_score.score:.4f})")
+        for m, s in score.quality_score.evaluator_scores.items():
+            typer.echo(f"    - {m}: {s:.2f}")
+
+        typer.echo("\n" + typer.style("SECURITY SCORE", bold=True))
+        typer.echo(f"  Score: {score.security_score.score * 100:.1f}% ({score.security_score.score:.4f})")
+        typer.echo(f"  Defended: {score.security_score.defended_cases}/{score.security_score.total_cases}")
+        typer.echo(f"  High/Critical Failures: {score.security_score.high_critical_failures}")
+
+        typer.echo("\n" + typer.style("OVERALL RELIABILITY SCORE", bold=True))
+        typer.echo(f"  Score: {score.overall_score.score * 100:.1f}% ({score.overall_score.score:.4f})\n")
+
+    finally:
+        db.close()
+
+
+@app.command("compare")
+def compare_cmd(
+    baseline: str = typer.Argument(..., help="Baseline run ID"),
+    candidate: str = typer.Argument(..., help="Candidate run ID"),
+    format: str = typer.Option("text", "--format", "-f", help="Output format ('text' or 'json')"),
+) -> None:
+    """Compare evaluation run iterations and perform regression detection."""
+    init_db()
+    db = SessionLocal()
+    try:
+        score_repo = ScoreRepository(db)
+        eval_repo = EvaluationRepository(db)
+        rt_repo = RedTeamRepository(db)
+        engine = ScoreEngine()
+        reg_engine = RegressionEngine()
+
+        def _get_or_calc_score(run_id: str):
+            s = score_repo.get_score(run_id)
+            e_run = eval_repo.get_run_by_id(run_id)
+            rt_run = rt_repo.get_run(run_id)
+            if not s and (e_run or rt_run):
+                target = e_run.target if e_run else (rt_run.target if rt_run else "demorrag")
+                s = engine.calculate_run_score(run_id=run_id, target=target, eval_run=e_run, redteam_run=rt_run)
+                score_repo.save_score(s)
+            return s, e_run, rt_run
+
+        b_score, b_eval_run, b_rt_run = _get_or_calc_score(baseline)
+        c_score, c_eval_run, c_rt_run = _get_or_calc_score(candidate)
+
+        if not b_score or not c_score:
+            missing = baseline if not b_score else candidate
+            typer.echo(typer.style(f"Error: Run ID '{missing}' not found for comparison.", fg=typer.colors.RED, bold=True), err=True)
+            raise typer.Exit(code=1)
+
+        reg_result = reg_engine.compare_scores(
+            baseline_score=b_score,
+            candidate_score=c_score,
+            baseline_eval_run=b_eval_run,
+            candidate_eval_run=c_eval_run,
+            baseline_redteam_run=b_rt_run,
+            candidate_redteam_run=c_rt_run,
+        )
+
+        if format.lower() == "json":
+            typer.echo(json.dumps(reg_result.model_dump(), indent=2, default=str))
+            return
+
+        comp = reg_result.comparison
+
+        typer.echo("PROBENEST RUN COMPARISON\n")
+        typer.echo(f"Baseline:  {comp.baseline_run_id}")
+        typer.echo(f"Candidate: {comp.candidate_run_id}")
+        typer.echo(f"Target:    {comp.target}\n")
+
+        if comp.warning:
+            typer.echo(typer.style(f"WARNING: {comp.warning}\n", fg=typer.colors.YELLOW, bold=True))
+
+        # Quality
+        typer.echo(typer.style("QUALITY", bold=True))
+        typer.echo(f"  Baseline:  {b_score.quality_score.score:.4f}")
+        typer.echo(f"  Candidate: {c_score.quality_score.score:.4f}")
+        q_symbol = "ALERT" if comp.quality_delta <= -0.05 else ("UP" if comp.quality_delta > 0 else "=")
+        typer.echo(f"  Delta:    {comp.quality_delta:+.4f}  {q_symbol}\n")
+
+        # Security
+        typer.echo(typer.style("SECURITY", bold=True))
+        typer.echo(f"  Baseline:  {b_score.security_score.score:.4f}")
+        typer.echo(f"  Candidate: {c_score.security_score.score:.4f}")
+        sec_symbol = "ALERT" if comp.security_delta <= -0.05 else ("UP" if comp.security_delta > 0 else "=")
+        typer.echo(f"  Delta:    {comp.security_delta:+.4f}  {sec_symbol}\n")
+
+        # Overall
+        typer.echo(typer.style("OVERALL", bold=True))
+        typer.echo(f"  Baseline:  {b_score.overall_score.score:.4f}")
+        typer.echo(f"  Candidate: {c_score.overall_score.score:.4f}")
+        ov_symbol = "ALERT" if comp.overall_delta <= -0.05 else ("UP" if comp.overall_delta > 0 else "=")
+        typer.echo(f"  Delta:    {comp.overall_delta:+.4f}  {ov_symbol}\n")
+
+        # Regression details
+        if reg_result.detected:
+            typer.echo(typer.style(f"REGRESSION DETECTED (Severity: {reg_result.severity})", fg=typer.colors.RED, bold=True))
+            for r in reg_result.reasons:
+                typer.echo(f"  - {r}")
+            typer.echo("")
+        else:
+            typer.echo(typer.style("NO REGRESSION DETECTED\n", fg=typer.colors.GREEN, bold=True))
+
+        if comp.new_failures:
+            typer.echo(typer.style("New failures:", bold=True, fg=typer.colors.RED))
+            for nf in comp.new_failures:
+                typer.echo(f"  {nf.test_id:<12} {nf.severity:<8} ({nf.category_or_evaluator})")
+
+        if comp.fixed_failures:
+            typer.echo(typer.style("\nFixed failures:", bold=True, fg=typer.colors.GREEN))
+            for ff in comp.fixed_failures:
+                typer.echo(f"  {ff.test_id:<12} {ff.severity:<8} ({ff.category_or_evaluator})")
+
+        if comp.persistent_failures:
+            typer.echo(typer.style("\nPersistent failures:", bold=True, fg=typer.colors.YELLOW))
+            for pf in comp.persistent_failures:
+                typer.echo(f"  {pf.test_id:<12} {pf.severity:<8} ({pf.category_or_evaluator})")
+
+        typer.echo("")
+
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":
