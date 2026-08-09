@@ -48,38 +48,6 @@ Most LLM evaluation platforms stop at answer quality. Probenest combines **Quali
 
 ## 2. Architecture
 
-```text
-                               PROBENEST PLATFORM
-                                       │
-                      Target Application (Mock / DemoRAG)
-                                       │
-                                TargetAdapter
-                                       │
-                        Evaluation Runner & RedTeamRunner
-                                       │
-                ┌──────────────────────┴──────────────────────┐
-                ↓                                              ↓
-         Quality Engine                                 Red-Team Engine
-   (Accuracy, Relevance,                       (Prompt Injection, Jailbreak,
-    Faithfulness, Hallucination)                   Override, Leakage, Tool Abuse)
-                │                                              │
-                └──────────────────────┬──────────────────────┘
-                                        ↓
-                                  Score Engine
-                                        │
-                                Regression Engine
-                                        │
-                              SQLite Storage Layer
-                                        │
-                ┌──────────────────────┴──────────────────────┐
-                ↓                                              ↓
-         Engineering CLI                                 FastAPI Backend
-   (evaluate, redteam, score,                                  │
-    compare, report commands)                            React Web Dashboard
-```
-
-The same architecture, rendered natively on GitHub:
-
 ```mermaid
 flowchart TD
     T["Target Application<br/>(Mock · DemoRAG · your app)"] --> A["TargetAdapter"]
