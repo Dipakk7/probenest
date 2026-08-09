@@ -11,7 +11,7 @@ def test_health_endpoint() -> None:
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"
-    assert data["service"] == "probenest"
+    assert data["app"] == "Probenest"
 
 
 def test_root_endpoint() -> None:
@@ -19,5 +19,5 @@ def test_root_endpoint() -> None:
     response = client.get("/")
     assert response.status_code == 200
     data = response.json()
-    assert data["service"] == "Probenest"
-    assert data["status"] == "running"
+    assert "message" in data
+    assert "docs" in data

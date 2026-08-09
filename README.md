@@ -18,6 +18,7 @@ Probenest provides automated evaluation and red-teaming pipelines for LLMs, RAG 
 - [x] **Phase 2 — Evaluation Core**: Domain models (`EvaluationCase`, `TargetResponse`, `EvaluationResult`, `EvaluationRun`), `TargetAdapter` protocol, `Evaluator` protocol, `EvaluationRunner`, SQLite persistence, dataset loader, `MockTargetAdapter`, `ExactMatchEvaluator`, CLI `probenest evaluate`, and REST API endpoints (`/api/v1/evaluations`).
 - [x] **Phase 3 — DemoRAG Target Application**: Fictional reference RAG application (`demo_target/demo_rag/`), document loader & chunker, TF-IDF retriever, LLM provider abstraction (`MockLLMProvider`, `OllamaProvider`), RAG pipeline, FastAPI endpoints, Probenest `DemoRAGAdapter`.
 - [x] **Phase 4 — Quality Evaluation Engine**: `AccuracyEvaluator`, `RelevanceEvaluator`, `FaithfulnessEvaluator`, `HallucinationEvaluator`, `EvaluationJudge` abstraction (`MockEvaluationJudge`, `OllamaEvaluationJudge`), Evaluator Registry, CLI quality breakdown, API evaluator selection.
+- [x] **Phase 5 — Adversarial Red-Team Engine**: `RedTeamCase`, `AttackCategory`, `Severity`, `RedTeamResult`, `RedTeamRun`, 5 Red-Team Evaluators (Prompt Injection, Jailbreak, Instruction Override, Data Leakage, Tool Abuse), attack datasets in `datasets/redteam/`, `RedTeamRunner`, SQLite persistence, CLI `probenest redteam`, REST API endpoints (`/api/v1/redteam`).
 
 ---
 
@@ -26,20 +27,18 @@ Probenest provides automated evaluation and red-teaming pipelines for LLMs, RAG 
 ```text
                         Target Application (Mock / DemoRAG)
                                        ↓
-                                TargetResponse
+                                RedTeamRunner
                                        ↓
-                                EvaluationRunner
-                                       ↓
-                           Quality Evaluator Suite
-               ┌───────────────┼───────────────┬───────────────┐
-               ↓               ↓               ↓               ↓
-       AccuracyEvaluator RelevanceEvaluator FaithfulnessEvaluator HallucinationEvaluator
-               │               │               │               │
-               └───────────────┼───────────────┴───────────────┘
+                         Adversarial Attack Cases
+               ┌───────────────┼───────────────┬───────────────┬───────────────┐
+               ↓               ↓               ↓               ↓               ↓
+        PromptInjection    Jailbreak     InstructionOverride  DataLeakage    ToolAbuse
+               │               │               │               │               │
+               └───────────────┼───────────────┴───────────────┴───────────────┘
                                ↓
-                       EvaluationJudge (Mock / Ollama)
+                 RedTeamEvaluator (PASS = Resisted, FAIL = Succumbed)
                                ↓
-                       EvaluationResult (Normalized 0.0 - 1.0)
+                    RedTeamResult & Severity (LOW / MEDIUM / HIGH / CRITICAL)
                                ↓
                        SQLite DB Persistence
 ```
@@ -62,9 +61,9 @@ cp .env.example .env
 
 ---
 
-## 6. Running Evaluation Pipeline
+## 6. Running Evaluation Pipelines
 
-### CLI Quality Evaluation
+### Quality Evaluation CLI
 
 ```bash
 # Evaluate mock target
@@ -72,6 +71,16 @@ probenest evaluate --target mock --evaluators quality
 
 # Evaluate DemoRAG target (with DemoRAG server running on port 8001)
 probenest evaluate --target demorrag --dataset datasets/golden/rag.json --evaluators quality
+```
+
+### Red-Team Evaluation CLI
+
+```bash
+# Run all red-team suites against mock target
+probenest redteam --target mock
+
+# Run prompt injection suite against DemoRAG
+probenest redteam --target demorrag --category prompt_injection
 ```
 
 ---
@@ -103,5 +112,5 @@ cd demo_target/demo_rag && python -m pytest && python -m ruff check .
 - [x] **Phase 2: Evaluation Core** (Domain abstractions, Target adapters, Evaluator interfaces, Runner engine, SQLite persistence, REST API, CLI evaluation)
 - [x] **Phase 3: DemoRAG Target Application** (Fictional reference RAG target application, document chunker, TF-IDF retriever, RAG pipeline, Probenest adapter)
 - [x] **Phase 4: Quality Evaluation Engine** (Accuracy, Relevance, Faithfulness, Hallucination evaluators, Mock & Ollama judge abstractions)
-- [ ] **Phase 5: Red-Team Engine** (Adversarial probes, Injection payloads, Vulnerability scores)
+- [x] **Phase 5: Adversarial Red-Team Engine** (Prompt Injection, Jailbreak, Instruction Override, Data Leakage, Tool Abuse evaluators, attack datasets, CLI & API red-teaming)
 - [ ] **Phase 6: Score Engine & Analytics** (Regression detection, Detailed metrics, Dashboard analytics)

@@ -46,59 +46,72 @@ FastAPI docs available at `http://127.0.0.1:8000/docs`.
 
 ---
 
-## Running Quality Evaluations
+## Running Quality & Red-Team Evaluations
 
-### CLI Execution
-
-Run the Quality Evaluation Engine across Accuracy, Relevance, Faithfulness, and Hallucination metrics:
+### Quality Evaluation CLI
 
 ```bash
-# Evaluate mock target
 probenest evaluate --target mock --evaluators quality
+probenest evaluate --target demorrag --dataset datasets/golden/rag.json --evaluators quality
+```
 
-# Evaluate DemoRAG target (with DemoRAG server running on port 8001)
-probenest evaluate --target demorrag --dataset ../datasets/golden/rag.json --evaluators quality
+### Red-Team Evaluation CLI
+
+Run automated adversarial attack suites:
+
+```bash
+# Run all red-team suites against mock target
+probenest redteam --target mock
+
+# Run prompt injection suite against DemoRAG
+probenest redteam --target demorrag --category prompt_injection
+
+# Run custom attack dataset
+probenest redteam --target demorrag --dataset datasets/redteam/injection.json
 ```
 
 Output format:
 
 ```text
-PROBENEST QUALITY EVALUATION
+PROBENEST RED-TEAM EVALUATION
 
 Target: demorrag
-Dataset: datasets/golden/rag.json
 
-Run: run_fe0d9622
-Status: COMPLETED
-Cases: 10
+Prompt Injection
+  5/5 defended
+  0 failures
 
-Accuracy
-  4/10 passed
-  Score: 0.40
+Instruction Override
+  3/3 defended
+  0 failures
 
-Relevance
-  10/10 passed
-  Score: 1.00
+Jailbreak
+  8/8 defended
+  0 failures
 
-Faithfulness
-  10/10 passed
-  Score: 1.00
+Data Leakage
+  8/8 defended
+  0 failures
 
-Hallucination
-  8/10 passed
-  Score: 0.80
+Tool Abuse
+  8/8 defended
+  0 failures
+
+TOTAL TESTS: 32
+FAILURES: 0
+High-risk failures: 0
 ```
 
 ---
 
 ## API Usage
 
-Trigger quality evaluation via REST API:
+Trigger red-team evaluation via REST API:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/v1/evaluations \
+curl -X POST http://127.0.0.1:8000/api/v1/redteam \
   -H "Content-Type: application/json" \
-  -d '{"target": "demorrag", "evaluators": ["accuracy", "relevance", "faithfulness", "hallucination"]}'
+  -d '{"target": "demorrag", "category": "prompt_injection"}'
 ```
 
 ---

@@ -6,52 +6,56 @@ Probenest is an Adversarial AI Evaluation & Reliability Platform designed to ass
 
 ---
 
-## Phase 4 Architecture (Quality Evaluation Engine)
+## Phase 5 Architecture (Adversarial Red-Team Engine)
 
-Phase 4 implements the Quality Evaluation Engine powered by standard quality evaluators and judge abstractions:
+Phase 5 implements the Adversarial Red-Team Engine evaluating target applications against controlled attack cases across 5 attack categories:
 
 ```text
                         Target Application (Mock / DemoRAG)
                                        ↓
-                                TargetResponse
+                                RedTeamRunner
                                        ↓
-                                EvaluationRunner
-                                       ↓
-                           Quality Evaluator Suite
-               ┌───────────────┼───────────────┬───────────────┐
-               ↓               ↓               ↓               ↓
-       AccuracyEvaluator RelevanceEvaluator FaithfulnessEvaluator HallucinationEvaluator
-               │               │               │               │
-               └───────────────┼───────────────┴───────────────┘
+                         Adversarial Attack Cases
+               ┌───────────────┼───────────────┬───────────────┬───────────────┐
+               ↓               ↓               ↓               ↓               ↓
+        PromptInjection    Jailbreak     InstructionOverride  DataLeakage    ToolAbuse
+               │               │               │               │               │
+               └───────────────┼───────────────┴───────────────┴───────────────┘
                                ↓
-                       EvaluationJudge (Mock / Ollama)
+                 RedTeamEvaluator (PASS = Resisted, FAIL = Succumbed)
                                ↓
-                       EvaluationResult (Normalized 0.0 - 1.0)
+                    RedTeamResult & Severity (LOW / MEDIUM / HIGH / CRITICAL)
                                ↓
                        SQLite DB Persistence
 ```
 
 ### Core Architecture Components
 
-1. **Quality Evaluators (`backend/app/evaluators/`)**:
-   - `AccuracyEvaluator`: Evaluates semantic correctness comparing expected ground truth against target output using layered normalization, fuzzy matching, and judge fallback.
-   - `RelevanceEvaluator`: Evaluates how directly the target output addresses the user question, penalizing off-topic generation.
-   - `FaithfulnessEvaluator`: Evaluates whether claims in target output are supported by retrieved context snippets (`TargetResponse.context`).
-   - `HallucinationEvaluator`: Evaluates grounding and unsupported content risk (Score 1.0 = no hallucination / fully grounded, 0.0 = severe hallucination).
+1. **Red-Team Domain Models (`backend/app/domain/redteam.py`)**:
+   - `AttackCategory`: Controlled attack enum (`prompt_injection`, `jailbreak`, `instruction_override`, `data_leakage`, `tool_abuse`).
+   - `Severity`: Impact severity enum (`low`, `medium`, `high`, `critical`).
+   - `RedTeamCase`: Represents an adversarial prompt test case.
+   - `RedTeamResult`: Standardized evaluation result preserving pass/fail defense state, evidence, actual target output, and expected safe behavior.
+   - `RedTeamRun`: Container tracking total cases, defended cases, failed cases, and high-risk failures count.
 
-2. **Evaluation Judge Abstraction (`backend/app/judges/`)**:
-   - `EvaluationJudge`: Protocol interface defining evaluation judges (`def judge(...)`).
-   - `MockEvaluationJudge`: Deterministic offline judge using heuristic rules and regex to score outputs without external LLM calls.
-   - `OllamaEvaluationJudge`: Optional Ollama HTTP API judge (`qwen2.5:7b`), parsing JSON responses and handling connection failures gracefully.
+2. **Red-Team Evaluators (`backend/app/redteam/evaluators/`)**:
+   - `PromptInjectionEvaluator`: Checks for refusal, system prompt leakage, or instruction compliance.
+   - `JailbreakEvaluator`: Checks if safety boundaries and persona restrictions were bypassed.
+   - `InstructionOverrideEvaluator`: Checks if user attack text overrode core system rules.
+   - `DataLeakageEvaluator`: Checks for disclosure of synthetic protected secret tokens (`PROBENEST-DEMO-SECRET-001`).
+   - `ToolAbuseEvaluator`: Inspects `TargetResponse.tool_calls` for unauthorized execution of protected synthetic actions (`protected_action`, `delete_account`).
 
-3. **Evaluator Registry & Quality Service (`backend/app/evaluators/registry.py` & `backend/app/services/quality_service.py`)**:
-   - Resolves metric names (`"accuracy"`, `"relevance"`, `"faithfulness"`, `"hallucination"`, `"quality"`) to evaluator instances and produces metric summaries.
+3. **Attack Datasets (`datasets/redteam/`)**:
+   - Structured JSON attack datasets for prompt injection, jailbreak, data leakage, and tool abuse.
+
+4. **Persistence Layer (`backend/app/repositories/redteam_repository.py`)**:
+   - Stores red-team runs and detailed result records in SQLite ORM (`redteam_runs` and `redteam_results`).
 
 ---
 
 ## Planned Architecture (Future Phases)
 
-In upcoming phases, Probenest will incorporate red-teaming suits, security scores, regression detection, and dashboard analytics:
+In upcoming phases, Probenest will incorporate security scores, regression detection, and dashboard analytics:
 
 ```text
 Target AI Application (DemoRAG)
