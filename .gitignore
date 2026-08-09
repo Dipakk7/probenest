@@ -44,6 +44,9 @@ dist/
 dist-ssr/
 *.local
 
+# Probenest Runtime Artifacts
+reports/
+
 # IDE & OS
 .vscode/
 .idea/

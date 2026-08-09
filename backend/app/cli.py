@@ -10,7 +10,9 @@ from app.domain.redteam import RedTeamCase
 from app.evaluators.registry import get_evaluators_by_names
 from app.loaders.dataset import DatasetLoadError
 from app.loaders.redteam_loader import RedTeamDatasetLoader
-from app.regression.engine import RegressionEngine
+from app.reports.json_report import JSONReportGenerator
+from app.reports.markdown_report import MarkdownReportGenerator
+from app.reports.service import ReportService
 from app.repositories.evaluation_repository import EvaluationRepository
 from app.repositories.redteam_repository import RedTeamRepository
 from app.repositories.score_repository import ScoreRepository
@@ -49,9 +51,11 @@ def evaluate(
         "-e",
         help="Comma-separated list of evaluators (accuracy, relevance, faithfulness, hallucination, exact_match, quality)",
     ),
+    format: str = typer.Option("text", "--format", "-f", help="Output format ('text', 'json', or 'markdown')"),
+    output: str | None = typer.Option(None, "--output", "-o", help="File path to write report output"),
     debug: bool = typer.Option(False, "--debug", help="Enable verbose debug output and tracebacks"),
 ) -> None:
-    """Run AI quality evaluation pipeline against target application."""
+    """Run AI quality evaluation pipeline against target application. (Exit Code 0 on completion)."""
     target_key = target.lower()
     if target_key in ["demorrag", "rag"]:
         target_adapter = DemoRAGAdapter()
@@ -71,10 +75,6 @@ def evaluate(
     evaluator_names = [e.strip() for e in evaluators.split(",") if e.strip()]
     evaluator_instances = get_evaluators_by_names(evaluator_names)
 
-    typer.echo("PROBENEST QUALITY EVALUATION\n")
-    typer.echo(f"Target: {target}")
-    typer.echo(f"Dataset: {dataset_path}\n")
-
     init_db()
     db = SessionLocal()
     try:
@@ -86,11 +86,31 @@ def evaluate(
             target_name=target,
         )
 
+        report_svc = ReportService(db)
+        run_report = report_svc.generate_run_report(run_record.run_id)
+
+        if output:
+            if output.endswith(".json") or format.lower() == "json":
+                JSONReportGenerator.write_json_file(run_report, output)
+            else:
+                MarkdownReportGenerator.write_markdown_file(run_report, output)
+            typer.echo(f"Evaluation report written to {output}")
+            return
+
+        if format.lower() == "json":
+            typer.echo(JSONReportGenerator.generate_json_string(run_report))
+            return
+        elif format.lower() == "markdown":
+            typer.echo(MarkdownReportGenerator.generate_markdown(run_report))
+            return
+
+        typer.echo("PROBENEST QUALITY EVALUATION\n")
+        typer.echo(f"Target: {target}")
+        typer.echo(f"Dataset: {dataset_path}\n")
         typer.echo(f"Run: {run_record.run_id}")
         typer.echo(f"Status: {run_record.status.value.upper()}")
         typer.echo(f"Cases: {run_record.total_cases}\n")
 
-        # Display metric summaries
         summaries = QualityEvaluationService.summarize_results(run_record.results)
         for metric_name, summary in summaries.items():
             short_name = metric_name.replace("Evaluator", "")
@@ -107,12 +127,12 @@ def evaluate(
         typer.echo(typer.style(f"Dataset Error: {e}", fg=typer.colors.RED, bold=True), err=True)
         if debug:
             raise
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=2)
     except Exception as e:
         typer.echo(typer.style(f"Evaluation Error: {e}", fg=typer.colors.RED, bold=True), err=True)
         if debug:
             raise
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=3)
     finally:
         db.close()
 
@@ -132,9 +152,11 @@ def redteam(
         "-c",
         help="Specific attack category (prompt_injection, jailbreak, instruction_override, data_leakage, tool_abuse)",
     ),
+    format: str = typer.Option("text", "--format", "-f", help="Output format ('text', 'json', or 'markdown')"),
+    output: str | None = typer.Option(None, "--output", "-o", help="File path to write report output"),
     debug: bool = typer.Option(False, "--debug", help="Enable verbose debug output and tracebacks"),
 ) -> None:
-    """Run adversarial red-team probe suite against target application."""
+    """Run adversarial red-team probe suite against target application. (Exit Code 0 on completion)."""
     target_key = target.lower()
     if target_key in ["demorrag", "rag"]:
         target_adapter = DemoRAGAdapter()
@@ -151,7 +173,6 @@ def redteam(
     if dataset:
         cases = RedTeamDatasetLoader.load_from_file(dataset)
     else:
-        # Load all red-team dataset files
         dataset_files = ["injection.json", "jailbreak.json", "leakage.json", "tool_abuse.json"]
         for fname in dataset_files:
             fpath = redteam_dir / fname
@@ -161,9 +182,6 @@ def redteam(
     if category:
         cat_norm = category.lower().strip()
         cases = [c for c in cases if c.category.value == cat_norm or cat_norm in c.category.value]
-
-    typer.echo("PROBENEST RED-TEAM EVALUATION\n")
-    typer.echo(f"Target: {target}\n")
 
     init_db()
     db = SessionLocal()
@@ -176,7 +194,27 @@ def redteam(
             category_filter=category,
         )
 
-        # Group results by category
+        report_svc = ReportService(db)
+        run_report = report_svc.generate_run_report(run_record.run_id)
+
+        if output:
+            if output.endswith(".json") or format.lower() == "json":
+                JSONReportGenerator.write_json_file(run_report, output)
+            else:
+                MarkdownReportGenerator.write_markdown_file(run_report, output)
+            typer.echo(f"Red-team report written to {output}")
+            return
+
+        if format.lower() == "json":
+            typer.echo(JSONReportGenerator.generate_json_string(run_report))
+            return
+        elif format.lower() == "markdown":
+            typer.echo(MarkdownReportGenerator.generate_markdown(run_report))
+            return
+
+        typer.echo("PROBENEST RED-TEAM EVALUATION\n")
+        typer.echo(f"Target: {target}\n")
+
         category_summary: dict[str, dict[str, int]] = {}
         for r in run_record.results:
             cat_name = r.category.value.replace("_", " ").title()
@@ -203,7 +241,6 @@ def redteam(
         typer.echo(typer.style(f"FAILURES: {run_record.failed_cases}", fg=typer.colors.RED if run_record.failed_cases > 0 else typer.colors.GREEN, bold=True))
         typer.echo(typer.style(f"High-risk failures: {run_record.high_critical_failures}\n", fg=typer.colors.RED if run_record.high_critical_failures > 0 else typer.colors.GREEN, bold=True))
 
-        # Display failure details
         if run_record.failed_cases > 0:
             typer.echo(typer.style("FAILURE DETAILS", bold=True, fg=typer.colors.RED))
             typer.echo("-" * 40)
@@ -218,11 +255,16 @@ def redteam(
                     typer.echo(f"Reason: {r.reason}")
                     typer.echo("-" * 40)
 
+    except DatasetLoadError as e:
+        typer.echo(typer.style(f"Red-Team Dataset Error: {e}", fg=typer.colors.RED, bold=True), err=True)
+        if debug:
+            raise
+        raise typer.Exit(code=2)
     except Exception as e:
         typer.echo(typer.style(f"Red-Team Execution Error: {e}", fg=typer.colors.RED, bold=True), err=True)
         if debug:
             raise
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=3)
     finally:
         db.close()
 
@@ -230,57 +272,69 @@ def redteam(
 @app.command("score")
 def score_cmd(
     run_id: str = typer.Argument(..., help="Run ID to calculate and display scores for"),
-    format: str = typer.Option("text", "--format", "-f", help="Output format ('text' or 'json')"),
+    format: str = typer.Option("text", "--format", "-f", help="Output format ('text', 'json', or 'markdown')"),
+    output: str | None = typer.Option(None, "--output", "-o", help="File path to write report output"),
 ) -> None:
-    """Calculate and display Quality, Security, and Overall Reliability scores for a run."""
+    """Calculate and display Quality, Security, and Overall Reliability scores for a run. (Exit Code 0)."""
     init_db()
     db = SessionLocal()
     try:
-        score_repo = ScoreRepository(db)
-        eval_repo = EvaluationRepository(db)
-        rt_repo = RedTeamRepository(db)
+        report_svc = ReportService(db)
+        try:
+            run_report = report_svc.generate_run_report(run_id)
+        except ValueError:
+            typer.echo(typer.style(f"Error: Run with ID '{run_id}' not found.", fg=typer.colors.RED, bold=True), err=True)
+            raise typer.Exit(code=2)
 
-        score = score_repo.get_score(run_id)
-
-        if not score:
-            # Try calculating score dynamically if run exists
-            eval_run = eval_repo.get_run_by_id(run_id)
-            rt_run = rt_repo.get_run(run_id)
-
-            if not eval_run and not rt_run:
-                typer.echo(typer.style(f"Error: Run with ID '{run_id}' not found.", fg=typer.colors.RED, bold=True), err=True)
-                raise typer.Exit(code=1)
-
-            engine = ScoreEngine()
-            score = engine.calculate_run_score(
-                run_id=run_id,
-                target=eval_run.target if eval_run else (rt_run.target if rt_run else "demorrag"),
-                eval_run=eval_run,
-                redteam_run=rt_run,
-            )
-            score_repo.save_score(score)
+        if output:
+            if output.endswith(".json") or format.lower() == "json":
+                JSONReportGenerator.write_json_file(run_report, output)
+            else:
+                MarkdownReportGenerator.write_markdown_file(run_report, output)
+            typer.echo(f"Score report written to {output}")
+            return
 
         if format.lower() == "json":
-            typer.echo(json.dumps(score.model_dump(), indent=2, default=str))
+            typer.echo(JSONReportGenerator.generate_json_string(run_report))
+            return
+        elif format.lower() == "markdown":
+            typer.echo(MarkdownReportGenerator.generate_markdown(run_report))
             return
 
         typer.echo("PROBENEST RUN SCORE SUMMARY\n")
-        typer.echo(f"Run ID: {score.run_id}")
-        typer.echo(f"Target: {score.target}\n")
+        typer.echo(f"Run ID: {run_report.run.run_id}")
+        typer.echo(f"Target: {run_report.run.target}\n")
 
+        # Quality Score
         typer.echo(typer.style("QUALITY SCORE", bold=True))
-        typer.echo(f"  Score: {score.quality_score.score * 100:.1f}% ({score.quality_score.score:.4f})")
-        for m, s in score.quality_score.evaluator_scores.items():
-            typer.echo(f"    - {m}: {s:.2f}")
+        if run_report.quality.available and run_report.quality.quality_score is not None:
+            typer.echo(f"  Score: {run_report.quality.quality_score * 100:.1f}% ({run_report.quality.quality_score:.4f})")
+            for m, s in run_report.quality.evaluator_scores.items():
+                typer.echo(f"    - {m}: {s:.2f}")
+        else:
+            typer.echo("  Score: N/A (No quality tests executed)")
 
+        # Security Score
         typer.echo("\n" + typer.style("SECURITY SCORE", bold=True))
-        typer.echo(f"  Score: {score.security_score.score * 100:.1f}% ({score.security_score.score:.4f})")
-        typer.echo(f"  Defended: {score.security_score.defended_cases}/{score.security_score.total_cases}")
-        typer.echo(f"  High/Critical Failures: {score.security_score.high_critical_failures}")
+        if run_report.security.available and run_report.security.security_score is not None:
+            typer.echo(f"  Score: {run_report.security.security_score * 100:.1f}% ({run_report.security.security_score:.4f})")
+            typer.echo(f"  Defended: {run_report.security.defended_cases}/{run_report.security.total_cases}")
+            typer.echo(f"  High/Critical Failures: {run_report.security.high_critical_failures}")
+        else:
+            typer.echo("  Score: N/A (No red-team tests executed)")
 
+        # Overall Score
         typer.echo("\n" + typer.style("OVERALL RELIABILITY SCORE", bold=True))
-        typer.echo(f"  Score: {score.overall_score.score * 100:.1f}% ({score.overall_score.score:.4f})\n")
+        if run_report.overall.reliability_score is not None:
+            typer.echo(f"  Score: {run_report.overall.reliability_score * 100:.1f}% ({run_report.overall.reliability_score:.4f})\n")
+        else:
+            typer.echo("  Score: N/A\n")
 
+    except typer.Exit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        typer.echo(typer.style(f"Score Error: {e}", fg=typer.colors.RED, bold=True), err=True)
+        raise typer.Exit(code=3)
     finally:
         db.close()
 
@@ -289,50 +343,58 @@ def score_cmd(
 def compare_cmd(
     baseline: str = typer.Argument(..., help="Baseline run ID"),
     candidate: str = typer.Argument(..., help="Candidate run ID"),
-    format: str = typer.Option("text", "--format", "-f", help="Output format ('text' or 'json')"),
+    format: str = typer.Option("text", "--format", "-f", help="Output format ('text', 'json', or 'markdown')"),
+    output: str | None = typer.Option(None, "--output", "-o", help="File path to write comparison output"),
 ) -> None:
-    """Compare evaluation run iterations and perform regression detection."""
+    """Compare evaluation run iterations and perform regression detection. (Exit 0 = no regression, Exit 1 = regression detected)."""
     init_db()
     db = SessionLocal()
     try:
+        report_svc = ReportService(db)
+        try:
+            cand_report = report_svc.generate_run_report(candidate, baseline_run_id=baseline)
+        except ValueError as e:
+            typer.echo(typer.style(f"Error: {e}", fg=typer.colors.RED, bold=True), err=True)
+            raise typer.Exit(code=2)
+
+        reg_result = cand_report.regression
+        if not reg_result:
+            typer.echo(typer.style(f"Error: Could not generate comparison for '{baseline}' and '{candidate}'.", fg=typer.colors.RED, bold=True), err=True)
+            raise typer.Exit(code=2)
+
+        if output:
+            if output.endswith(".json") or format.lower() == "json":
+                JSONReportGenerator.write_json_file(cand_report, output)
+            else:
+                MarkdownReportGenerator.write_markdown_file(cand_report, output)
+            typer.echo(f"Comparison report written to {output}")
+            raise typer.Exit(code=1 if reg_result.detected else 0)
+
+        if format.lower() == "json":
+            typer.echo(json.dumps(reg_result.model_dump(), indent=2, default=str))
+            raise typer.Exit(code=1 if reg_result.detected else 0)
+        elif format.lower() == "markdown":
+            typer.echo(MarkdownReportGenerator.generate_markdown(cand_report))
+            raise typer.Exit(code=1 if reg_result.detected else 0)
+
+        comp = reg_result.comparison
         score_repo = ScoreRepository(db)
         eval_repo = EvaluationRepository(db)
         rt_repo = RedTeamRepository(db)
         engine = ScoreEngine()
-        reg_engine = RegressionEngine()
 
-        def _get_or_calc_score(run_id: str):
-            s = score_repo.get_score(run_id)
-            e_run = eval_repo.get_run_by_id(run_id)
-            rt_run = rt_repo.get_run(run_id)
-            if not s and (e_run or rt_run):
-                target = e_run.target if e_run else (rt_run.target if rt_run else "demorrag")
-                s = engine.calculate_run_score(run_id=run_id, target=target, eval_run=e_run, redteam_run=rt_run)
-                score_repo.save_score(s)
-            return s, e_run, rt_run
+        def _get_score(rid: str):
+            s = score_repo.get_score(rid)
+            if not s:
+                e_run = eval_repo.get_run_by_id(rid)
+                rt_run = rt_repo.get_run(rid)
+                if e_run or rt_run:
+                    t = e_run.target if e_run else (rt_run.target if rt_run else "demorrag")
+                    s = engine.calculate_run_score(rid, t, eval_run=e_run, redteam_run=rt_run)
+            return s
 
-        b_score, b_eval_run, b_rt_run = _get_or_calc_score(baseline)
-        c_score, c_eval_run, c_rt_run = _get_or_calc_score(candidate)
-
-        if not b_score or not c_score:
-            missing = baseline if not b_score else candidate
-            typer.echo(typer.style(f"Error: Run ID '{missing}' not found for comparison.", fg=typer.colors.RED, bold=True), err=True)
-            raise typer.Exit(code=1)
-
-        reg_result = reg_engine.compare_scores(
-            baseline_score=b_score,
-            candidate_score=c_score,
-            baseline_eval_run=b_eval_run,
-            candidate_eval_run=c_eval_run,
-            baseline_redteam_run=b_rt_run,
-            candidate_redteam_run=c_rt_run,
-        )
-
-        if format.lower() == "json":
-            typer.echo(json.dumps(reg_result.model_dump(), indent=2, default=str))
-            return
-
-        comp = reg_result.comparison
+        b_score = _get_score(baseline)
+        c_score = _get_score(candidate)
 
         typer.echo("PROBENEST RUN COMPARISON\n")
         typer.echo(f"Baseline:  {comp.baseline_run_id}")
@@ -344,24 +406,24 @@ def compare_cmd(
 
         # Quality
         typer.echo(typer.style("QUALITY", bold=True))
-        typer.echo(f"  Baseline:  {b_score.quality_score.score:.4f}")
-        typer.echo(f"  Candidate: {c_score.quality_score.score:.4f}")
+        typer.echo(f"  Baseline:  {b_score.quality_score.score * 100:.1f}%")
+        typer.echo(f"  Candidate: {c_score.quality_score.score * 100:.1f}%")
         q_symbol = "ALERT" if comp.quality_delta <= -0.05 else ("UP" if comp.quality_delta > 0 else "=")
-        typer.echo(f"  Delta:    {comp.quality_delta:+.4f}  {q_symbol}\n")
+        typer.echo(f"  Delta:    {comp.quality_delta * 100:+.2f} pp  {q_symbol}\n")
 
         # Security
         typer.echo(typer.style("SECURITY", bold=True))
-        typer.echo(f"  Baseline:  {b_score.security_score.score:.4f}")
-        typer.echo(f"  Candidate: {c_score.security_score.score:.4f}")
+        typer.echo(f"  Baseline:  {b_score.security_score.score * 100:.1f}%")
+        typer.echo(f"  Candidate: {c_score.security_score.score * 100:.1f}%")
         sec_symbol = "ALERT" if comp.security_delta <= -0.05 else ("UP" if comp.security_delta > 0 else "=")
-        typer.echo(f"  Delta:    {comp.security_delta:+.4f}  {sec_symbol}\n")
+        typer.echo(f"  Delta:    {comp.security_delta * 100:+.2f} pp  {sec_symbol}\n")
 
         # Overall
         typer.echo(typer.style("OVERALL", bold=True))
-        typer.echo(f"  Baseline:  {b_score.overall_score.score:.4f}")
-        typer.echo(f"  Candidate: {c_score.overall_score.score:.4f}")
+        typer.echo(f"  Baseline:  {b_score.overall_score.score * 100:.1f}%")
+        typer.echo(f"  Candidate: {c_score.overall_score.score * 100:.1f}%")
         ov_symbol = "ALERT" if comp.overall_delta <= -0.05 else ("UP" if comp.overall_delta > 0 else "=")
-        typer.echo(f"  Delta:    {comp.overall_delta:+.4f}  {ov_symbol}\n")
+        typer.echo(f"  Delta:    {comp.overall_delta * 100:+.2f} pp  {ov_symbol}\n")
 
         # Regression details
         if reg_result.detected:
@@ -388,7 +450,95 @@ def compare_cmd(
                 typer.echo(f"  {pf.test_id:<12} {pf.severity:<8} ({pf.category_or_evaluator})")
 
         typer.echo("")
+        raise typer.Exit(code=1 if reg_result.detected else 0)
 
+    except typer.Exit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        typer.echo(typer.style(f"Compare Error: {e}", fg=typer.colors.RED, bold=True), err=True)
+        raise typer.Exit(code=3)
+    finally:
+        db.close()
+
+
+@app.command("report")
+def report_cmd(
+    run_id: str = typer.Argument(..., help="Run ID to generate comprehensive report for"),
+    baseline: str | None = typer.Option(None, "--baseline", "-b", help="Optional baseline run ID to include regression comparison"),
+    format: str = typer.Option("all", "--format", "-f", help="Report format ('all', 'json', or 'markdown')"),
+    output: str | None = typer.Option(None, "--output", "-o", help="Custom output directory or file path"),
+) -> None:
+    """Generate comprehensive JSON and Markdown evaluation reports. (Exit Code 0)."""
+    init_db()
+    db = SessionLocal()
+    try:
+        report_svc = ReportService(db)
+        try:
+            run_report = report_svc.generate_run_report(run_id, baseline_run_id=baseline)
+        except ValueError as e:
+            typer.echo(typer.style(f"Error: {e}", fg=typer.colors.RED, bold=True), err=True)
+            raise typer.Exit(code=2)
+
+        if output:
+            out_path = Path(output)
+            if out_path.suffix.lower() == ".json" or format.lower() == "json":
+                JSONReportGenerator.write_json_file(run_report, str(out_path))
+                typer.echo(f"Report JSON written to {out_path}")
+                return
+            elif out_path.suffix.lower() == ".md" or format.lower() in ["markdown", "md"]:
+                MarkdownReportGenerator.write_markdown_file(run_report, str(out_path))
+                typer.echo(f"Report Markdown written to {out_path}")
+                return
+            else:
+                json_p, md_p = report_svc.write_report_files(run_report, output_dir=out_path)
+                typer.echo(f"Report files written to directory {out_path}:")
+                typer.echo(f"  - {json_p}")
+                typer.echo(f"  - {md_p}")
+                return
+
+        if format.lower() == "json":
+            typer.echo(JSONReportGenerator.generate_json_string(run_report))
+            return
+
+        if format.lower() in ["markdown", "md"]:
+            typer.echo(MarkdownReportGenerator.generate_markdown(run_report))
+            return
+
+        json_p, md_p = report_svc.write_report_files(run_report)
+
+        typer.echo("PROBENEST REPORT GENERATION\n")
+        typer.echo(f"Run ID: {run_id}")
+        typer.echo(f"Target: {run_report.run.target}\n")
+        typer.echo("Generated Report Files:")
+        typer.echo(f"  - JSON:     {json_p}")
+        typer.echo(f"  - Markdown: {md_p}\n")
+
+        if run_report.quality.available and run_report.quality.quality_score is not None:
+            typer.echo(f"Quality Score:  {run_report.quality.quality_score * 100:.1f}%")
+        else:
+            typer.echo("Quality Score:  N/A")
+
+        if run_report.security.available and run_report.security.security_score is not None:
+            typer.echo(f"Security Score: {run_report.security.security_score * 100:.1f}%")
+        else:
+            typer.echo("Security Score: N/A")
+
+        if run_report.overall.reliability_score is not None:
+            typer.echo(f"Overall Score:  {run_report.overall.reliability_score * 100:.1f}%")
+        else:
+            typer.echo("Overall Score:  N/A")
+
+        if run_report.regression:
+            reg_status = f"REGRESSION DETECTED ({run_report.regression.severity})" if run_report.regression.detected else "NO REGRESSION DETECTED"
+            typer.echo(f"Regression:     {reg_status}")
+        else:
+            typer.echo("Regression:     NOT EVALUATED\n")
+
+    except typer.Exit:
+        raise
+    except Exception as e:  # noqa: BLE001
+        typer.echo(typer.style(f"Report Error: {e}", fg=typer.colors.RED, bold=True), err=True)
+        raise typer.Exit(code=3)
     finally:
         db.close()
 
