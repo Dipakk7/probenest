@@ -2,77 +2,130 @@
 
 **Adversarial AI Evaluation & Reliability Platform**
 
-Probenest is a standalone AI evaluation and adversarial testing platform designed to assess AI applications for accuracy, faithfulness, hallucination detection, prompt injection resilience, jailbreaks, data leakage, and tool abuse.
+[![CI](https://github.com/Dipakk7/probenest/actions/workflows/ci.yml/badge.svg)](https://github.com/Dipakk7/probenest/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![TypeScript](https://img.shields.io/badge/typescript-5.7%2B-blue.svg)](https://www.typescriptlang.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+Probenest is an adversarial AI evaluation and reliability platform designed to evaluate AI applications for quality metrics (accuracy, relevance, faithfulness, hallucination detection), stress-test them against security failure modes (prompt injection, jailbreaks, instruction overrides, data leakage, tool abuse), compute deterministic reliability scores, detect run-to-run regressions, and deliver insights via an engineering CLI and interactive web dashboard.
 
 ---
 
-## 1. Overview
+## 1. Why Probenest?
 
-Probenest provides automated evaluation, adversarial red-teaming pipelines, deterministic score engines, regression detection, reporting generators (JSON v1.0 & Markdown), and a web dashboard for LLMs, RAG systems, and AI agent frameworks.
+Most LLM evaluation platforms focus exclusively on answer quality. Probenest combines **Quality Evaluation**, **Adversarial Red-Team Auditing**, **Deterministic Scoring**, and **Regression Gating**:
 
----
-
-## 2. Current Status
-
-- [x] **Phase 1 — Foundation**: FastAPI REST backend, SQLite ORM foundation, Pydantic settings, Typer CLI, React + Vite frontend shell, Pytest & Ruff quality tooling.
-- [x] **Phase 2 — Evaluation Core**: Domain models (`EvaluationCase`, `TargetResponse`, `EvaluationResult`, `EvaluationRun`), `TargetAdapter` protocol, `Evaluator` protocol, `EvaluationRunner`, SQLite persistence, dataset loader, `MockTargetAdapter`, `ExactMatchEvaluator`, CLI `probenest evaluate`, and REST API endpoints (`/api/v1/evaluations`).
-- [x] **Phase 3 — DemoRAG Target Application**: Fictional reference RAG application (`demo_target/demo_rag/`), document loader & chunker, TF-IDF retriever, LLM provider abstraction (`MockLLMProvider`, `OllamaProvider`), RAG pipeline, FastAPI endpoints, Probenest `DemoRAGAdapter`.
-- [x] **Phase 4 — Quality Evaluation Engine**: `AccuracyEvaluator`, `RelevanceEvaluator`, `FaithfulnessEvaluator`, `HallucinationEvaluator`, `EvaluationJudge` abstraction (`MockEvaluationJudge`, `OllamaEvaluationJudge`), Evaluator Registry, CLI quality breakdown, API evaluator selection.
-- [x] **Phase 5 — Adversarial Red-Team Engine**: `RedTeamCase`, `AttackCategory`, `Severity`, `RedTeamResult`, `RedTeamRun`, 5 Red-Team Evaluators (Prompt Injection, Jailbreak, Instruction Override, Data Leakage, Tool Abuse), attack datasets in `datasets/redteam/`, `RedTeamRunner`, SQLite persistence, CLI `probenest redteam`, REST API endpoints (`/api/v1/redteam`).
-- [x] **Phase 6 — Score Engine & Regression Detection**: Deterministic `ScoreEngine` (Quality, Severity-Weighted Security, Overall Reliability), `RegressionEngine` (Metric Deltas, Test Failure Transitions, Severity Alerting), SQLite `run_scores` table, CLI `probenest score` & `probenest compare`, REST scoring endpoints.
-- [x] **Phase 7 — Reporting Engine & Engineering CLI**: Structured `RunReport` (JSON Schema v1.0 & Markdown), `ReportService`, missing data handling (`N/A`), standardized exit codes (0 = Success/No Regression, 1 = Regression, 2 = Invalid Args, 3 = Runtime Error), CLI `probenest report`, `--output` and `--format` options.
-- [x] **Phase 8 — Probenest Web Dashboard**: React + TypeScript + Vite + Tailwind CSS dashboard (`/`, `/evaluations`, `/redteam`, `/runs`, `/compare`, `/reports`), typed API client, score cards, severity badges, failure tables, regression alerts, responsive layout.
-- [x] **Phase 9 — Testing, CI & Reliability Hardening**: 100% offline pytest suite, pytest-cov coverage reporting, isolated test database fixtures (`conftest.py`), regression boundary & N/A safety tests, end-to-end integration pipeline test (`test_pipeline.py`), offline multi-job GitHub Actions CI.
+- **Adversarial Red-Team Engine**: Automated security probes across 5 attack categories with severity propagation (Low, Medium, High, Critical).
+- **Deterministic Reliability Scoring**: Zero-LLM math weighting quality mean (50%) and severity-adjusted security defense rates (50%).
+- **Run-to-Run Regression Detection**: Automated detection of metric degradation and test failure transitions (`new_failure`, `fixed_failure`, `persistent_failure`).
+- **Standardized CI Gating**: CLI exit codes (`0` = Success/No Regression, `1` = Regression Detected, `2` = Invalid Args, `3` = Runtime Error).
+- **Machine-Readable Reports**: Stable JSON schema (v1.0) and GitHub-friendly Markdown report generation.
+- **Interactive Web Dashboard**: React + TypeScript + Vite dashboard visualizing scores, category defense rates, failure tables, and regression comparisons.
 
 ---
 
-## 3. Architecture
+## 2. Architecture
 
 ```text
-Target Application (Mock / DemoRAG) ──→ Evaluation Core & Red-Team Engine
-                                                │
-                                                ↓
-                                          Score Engine
-                                                │
-                                                ↓
-                                        Regression Engine
-                                                │
-                                                ↓
-                                          Report Service
-                                         ┌──────┴──────┐
-                                         ↓             ↓
-                                       JSON        Markdown (schema_version = "1.0")
-                                         └──────┬──────┘
-                                                ↓
-                                      CLI & Web Dashboard
+                               PROBENEST PLATFORM
+                                       │
+                      Target Application (Mock / DemoRAG)
+                                       │
+                                TargetAdapter
+                                       │
+                        Evaluation Runner & RedTeamRunner
+                                       │
+                ┌──────────────────────┴──────────────────────┐
+                ↓                                             ↓
+         Quality Engine                                Red-Team Engine
+   (Accuracy, Relevance,                      (Prompt Injection, Jailbreak,
+    Faithfulness, Hallucination)                   Override, Leakage, Tool Abuse)
+                │                                             │
+                └──────────────────────┬──────────────────────┘
+                                       ↓
+                                  Score Engine
+                                       │
+                                Regression Engine
+                                       │
+                              SQLite Storage Layer
+                                       │
+                ┌──────────────────────┴──────────────────────┐
+                ↓                                             ↓
+         Engineering CLI                                FastAPI Backend
+   (evaluate, redteam, score,                                 │
+    compare, report commands)                          React Web Dashboard
 ```
 
 ---
 
-## 4. Tech Stack
+## 3. Core Capabilities & Methodology
 
-- **Backend**: Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2.x, SQLite, Scikit-Learn, Typer CLI, Pytest-Cov, Ruff
-- **Frontend**: React, TypeScript, Vite, Tailwind CSS, Lucide Icons
-- **CI / Reliability**: GitHub Actions (100% offline test suite execution)
+### Quality Evaluation
+- **Accuracy**: Exact match, normalized token match, and judge-assisted semantic alignment.
+- **Relevance**: Evaluates response pertinence against the input prompt.
+- **Faithfulness**: Verifies whether model output is grounded in retrieved context.
+- **Hallucination**: Detects ungrounded claims or hallucinated facts.
+
+### Adversarial Red-Team Engine
+- **Prompt Injection**: Direct and indirect prompt overrides.
+- **Jailbreak Attempts**: DAN persona switches, roleplay bypasses, developer mode tricks.
+- **Instruction Override**: Manipulation attempting to ignore system boundaries.
+- **Data Leakage**: Synthetic secret extraction (`PROBENEST-DEMO-SECRET-001`) and system prompt disclosure.
+- **Tool Abuse**: Unsanitized tool execution payloads.
+
+### Scoring & Regression Mechanics
+- **Quality Score**: Mean of available quality evaluator scores ($0.0 \le \text{Score} \le 1.0$).
+- **Security Score**: Severity-weighted defense rate ($\text{Low}=1.0, \text{Medium}=1.0, \text{High}=1.25, \text{Critical}=1.5$).
+- **Overall Reliability Score**: Default policy: $0.5 \times \text{Quality} + 0.5 \times \text{Security}$.
+- **Missing Data Handling**: Absence of test suites displays `N/A` (Not Executed) rather than fictitious `100%` scores.
+- **Regression Detection**: Triggers alert if candidate score degrades by $\ge 0.05$ or new critical failures emerge.
 
 ---
 
-## 5. Quickstart & CLI Commands
+## 4. Quickstart Guide
+
+### Prerequisites
+- Python 3.11+
+- Node.js v18+
+
+### Setup
+```bash
+# Clone repository
+git clone https://github.com/Dipakk7/probenest.git
+cd probenest
+
+# Environment configuration
+cp .env.example .env
+
+# Install backend
+cd backend
+python -m pip install -e ".[dev]"
+cd ..
+
+# Install frontend
+cd frontend
+npm install
+cd ..
+```
+
+---
+
+## 5. CLI Engineering Workflows
 
 ```bash
-# Quality evaluation
+# Run quality evaluation
 probenest evaluate --target mock --evaluators quality
 
-# Red-team adversarial audit
+# Run adversarial red-team audit
 probenest redteam --target mock
 
-# View run score
+# Calculate run score
 probenest score RUN_ID
 
-# Compare runs and detect regression (Exits 1 if regression detected)
+# Compare runs and perform regression detection (Exits 1 if regression detected)
 probenest compare BASELINE_ID CANDIDATE_ID
 
-# Generate comprehensive JSON and Markdown report files
+# Generate comprehensive JSON (v1.0) and Markdown report files
 probenest report RUN_ID
 ```
 
@@ -81,31 +134,79 @@ probenest report RUN_ID
 ## 6. Web Dashboard
 
 ```bash
-# Start backend server
+# Terminal 1: Start FastAPI Backend
 cd backend && uvicorn app.main:app --port 8000
 
-# Start frontend dev server
+# Terminal 2: Start React Frontend
 cd frontend && npm run dev
 ```
 
-Dashboard routes:
-- `/` — Overview & Top Scores
-- `/evaluations` — Quality Benchmarks
+Navigate to `http://localhost:5173`:
+- `/` — System Overview & Top Reliability Scores
+- `/evaluations` — Quality Metric Breakdown
 - `/redteam` — Security Defense Audits
-- `/runs` — History Log
-- `/compare` — Run Comparison & Regression Alerts
-- `/reports` — JSON & Markdown Reports
+- `/runs` — Evaluation Run History
+- `/compare` — Baseline vs. Candidate Regression Analysis
+- `/reports` — JSON (v1.0) & Markdown Report Viewer
 
 ---
 
-## 7. Developer Pre-Push Checklist
+## 7. DemoRAG Reference Target
 
-Before pushing changes:
+Probenest includes **DemoRAG** (`demo_target/demo_rag/`), a standalone reference Retrieval-Augmented Generation application containing document chunking, TF-IDF retrieval, synthetic security policies, and simulated tool call execution payloads for end-to-end target evaluation.
+
+---
+
+## 8. Testing & CI Hardening
+
+All CI test suites run **100% offline** without requiring external LLM services, Ollama, or API keys:
 
 ```bash
-[ ] cd backend && python -m pytest --cov=app --cov-report=term-missing
-[ ] cd backend && python -m ruff check .
-[ ] cd demo_target/demo_rag && python -m pytest && python -m ruff check .
-[ ] cd frontend && npm run build
-[ ] git status (Verify .env is untracked)
+# Backend pytest with coverage report
+cd backend
+python -m pytest --cov=app --cov-report=term-missing
+
+# Backend ruff static lint
+python -m ruff check .
+
+# DemoRAG pytest & ruff lint
+cd demo_target/demo_rag
+python -m pytest
+python -m ruff check .
+
+# Frontend TypeScript check & Vite build
+cd frontend
+npm run build
 ```
+
+---
+
+## 9. Limitations & Security Disclosures
+
+- **Benchmark Scope**: Red-team test suites evaluate controlled adversarial attack vectors and do not guarantee 100% security against novel zero-day prompt attacks.
+- **Synthetic Secrets**: Synthetic secret tokens (`PROBENEST-DEMO-SECRET-001`) test leakage resilience; they are not equivalent to production key management systems.
+- **Storage**: Probenest utilizes SQLite for local standalone development.
+- **Probabilistic Output**: LLM outputs are inherently probabilistic; evaluation scores represent statistical reliability over benchmark datasets.
+
+---
+
+## 10. Future Roadmap
+
+- Additional target application adapters (LangChain, LlamaIndex, AutoGen).
+- Automated adversarial prompt mutation algorithms.
+- CI/CD integration plugins (GitHub Actions PR Gate Action).
+- Multi-model benchmarking matrix.
+
+---
+
+## 11. Tech Stack
+
+- **Backend**: Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2.x, SQLite, Scikit-Learn, Typer CLI, Pytest-Cov, Ruff
+- **Frontend**: React, TypeScript, Vite, Tailwind CSS, Lucide Icons
+- **CI / Quality**: GitHub Actions (100% offline workflow execution)
+
+---
+
+## 12. License
+
+This project is licensed under the [MIT License](LICENSE).
