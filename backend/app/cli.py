@@ -5,8 +5,10 @@ import typer
 from app.adapters.demo_rag import DemoRAGAdapter
 from app.adapters.mock_target import MockTargetAdapter
 from app.db.database import SessionLocal, init_db
+from app.evaluators.registry import get_evaluators_by_names
 from app.loaders.dataset import DatasetLoadError
 from app.services.evaluation_service import EvaluationService
+from app.services.quality_service import QualityEvaluationService
 
 app = typer.Typer(
     name="probenest",
@@ -32,9 +34,15 @@ def evaluate(
         "-d",
         help="Evaluation dataset JSON file path",
     ),
+    evaluators: str = typer.Option(
+        "quality",
+        "--evaluators",
+        "-e",
+        help="Comma-separated list of evaluators (accuracy, relevance, faithfulness, hallucination, exact_match, quality)",
+    ),
     debug: bool = typer.Option(False, "--debug", help="Enable verbose debug output and tracebacks"),
 ) -> None:
-    """Run AI evaluation pipeline against target application using specified dataset."""
+    """Run AI quality evaluation pipeline against target application."""
     target_key = target.lower()
     if target_key in ["demorrag", "rag"]:
         target_adapter = DemoRAGAdapter()
@@ -46,13 +54,15 @@ def evaluate(
     if dataset:
         dataset_path = Path(dataset)
     else:
-        # Default relative search
-        root_dir = Path(__file__).resolve().parents[3]
-        dataset_path = root_dir / "datasets" / "golden" / default_dataset_rel
+        repo_root = Path(__file__).resolve().parents[2]
+        dataset_path = repo_root / "datasets" / "golden" / default_dataset_rel
         if not dataset_path.is_file():
-            dataset_path = Path(f"../datasets/golden/{default_dataset_rel}")
+            dataset_path = Path(f"datasets/golden/{default_dataset_rel}").resolve()
 
-    typer.echo("PROBENEST EVALUATION\n")
+    evaluator_names = [e.strip() for e in evaluators.split(",") if e.strip()]
+    evaluator_instances = get_evaluators_by_names(evaluator_names)
+
+    typer.echo("PROBENEST QUALITY EVALUATION\n")
     typer.echo(f"Target: {target}")
     typer.echo(f"Dataset: {dataset_path}\n")
 
@@ -63,20 +73,25 @@ def evaluate(
         run_record = service.run_evaluation(
             dataset_path_or_cases=dataset_path,
             target_adapter=target_adapter,
+            evaluators=evaluator_instances,
         )
 
         typer.echo(f"Run: {run_record.run_id}")
         typer.echo(f"Status: {run_record.status.value.upper()}")
-        typer.echo(f"Cases: {run_record.total_cases}")
-        typer.echo(f"Passed: {run_record.passed_cases}")
-        typer.echo(f"Failed: {run_record.failed_cases}\n")
+        typer.echo(f"Cases: {run_record.total_cases}\n")
 
-        typer.echo("Results:")
-        for res in run_record.results:
-            status_label = "PASS" if res.passed else "FAIL"
-            color = typer.colors.GREEN if res.passed else typer.colors.RED
-            formatted_status = typer.style(f"  {status_label}", fg=color, bold=True)
-            typer.echo(f"{formatted_status} {res.test_id} ({res.evaluator}): {res.reason}")
+        # Display metric summaries
+        summaries = QualityEvaluationService.summarize_results(run_record.results)
+        for metric_name, summary in summaries.items():
+            short_name = metric_name.replace("Evaluator", "")
+            typer.echo(typer.style(short_name, bold=True))
+            passed = summary["passed"]
+            total = summary["total"]
+            avg_score = summary["avg_score"]
+
+            color = typer.colors.GREEN if avg_score >= 0.7 else typer.colors.RED
+            formatted_stats = typer.style(f"  {passed}/{total} passed\n  Score: {avg_score:.2f}\n", fg=color)
+            typer.echo(formatted_stats)
 
     except DatasetLoadError as e:
         typer.echo(typer.style(f"Dataset Error: {e}", fg=typer.colors.RED, bold=True), err=True)

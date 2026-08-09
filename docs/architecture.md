@@ -2,79 +2,67 @@
 
 ## Overview
 
-Probenest is an Adversarial AI Evaluation & Reliability Platform designed to assess AI applications for quality (accuracy, faithfulness, hallucination, tool usage) and security (prompt injection, jailbreaks, instruction overrides, data leakage, tool abuse).
+Probenest is an Adversarial AI Evaluation & Reliability Platform designed to assess AI applications for quality (accuracy, relevance, faithfulness, hallucination, tool usage) and security (prompt injection, jailbreaks, instruction overrides, data leakage, tool abuse).
 
 ---
 
-## Phase 2 Architecture (Evaluation Core)
+## Phase 4 Architecture (Quality Evaluation Engine)
 
-Phase 2 establishes the core evaluation domain models, runner orchestration, SQLite persistence layer, and deterministic demonstration target/evaluators:
+Phase 4 implements the Quality Evaluation Engine powered by standard quality evaluators and judge abstractions:
 
 ```text
-               EvaluationCase
-                     │
-                     ↓
-               TargetAdapter (e.g. MockTargetAdapter)
-                     │
-                     ↓
-               TargetResponse
-                     │
-                     ↓
-               Evaluator (e.g. ExactMatchEvaluator)
-                     │
-                     ↓
-               EvaluationResult
-                     │
-                     ↓
-               EvaluationRun (SQLite Persistence)
+                        Target Application (Mock / DemoRAG)
+                                       ↓
+                                TargetResponse
+                                       ↓
+                                EvaluationRunner
+                                       ↓
+                           Quality Evaluator Suite
+               ┌───────────────┼───────────────┬───────────────┐
+               ↓               ↓               ↓               ↓
+       AccuracyEvaluator RelevanceEvaluator FaithfulnessEvaluator HallucinationEvaluator
+               │               │               │               │
+               └───────────────┼───────────────┴───────────────┘
+                               ↓
+                       EvaluationJudge (Mock / Ollama)
+                               ↓
+                       EvaluationResult (Normalized 0.0 - 1.0)
+                               ↓
+                       SQLite DB Persistence
 ```
 
 ### Core Architecture Components
 
-1. **Domain Abstractions (`backend/app/domain/`)**:
-   - `EvaluationCase`: Represents individual input/expected output evaluation test cases.
-   - `TargetResponse`: Encapsulates output text, context, tool calls, and execution metadata.
-   - `TargetAdapter`: Protocol interface enabling decoupled interaction with target applications.
-   - `Evaluator`: Protocol interface defining evaluation metrics and probes.
-   - `EvaluationResult`: Standardized case outcome payload (pass/fail, score, reason, evidence).
-   - `EvaluationRun`: Complete run metadata and case results container.
+1. **Quality Evaluators (`backend/app/evaluators/`)**:
+   - `AccuracyEvaluator`: Evaluates semantic correctness comparing expected ground truth against target output using layered normalization, fuzzy matching, and judge fallback.
+   - `RelevanceEvaluator`: Evaluates how directly the target output addresses the user question, penalizing off-topic generation.
+   - `FaithfulnessEvaluator`: Evaluates whether claims in target output are supported by retrieved context snippets (`TargetResponse.context`).
+   - `HallucinationEvaluator`: Evaluates grounding and unsupported content risk (Score 1.0 = no hallucination / fully grounded, 0.0 = severe hallucination).
 
-2. **Runner Engine (`backend/app/runner/`)**:
-   - `EvaluationRunner`: Orchestrates dispatching evaluation cases against target adapters, invoking generic evaluators, aggregating results, and reporting run completion.
+2. **Evaluation Judge Abstraction (`backend/app/judges/`)**:
+   - `EvaluationJudge`: Protocol interface defining evaluation judges (`def judge(...)`).
+   - `MockEvaluationJudge`: Deterministic offline judge using heuristic rules and regex to score outputs without external LLM calls.
+   - `OllamaEvaluationJudge`: Optional Ollama HTTP API judge (`qwen2.5:7b`), parsing JSON responses and handling connection failures gracefully.
 
-3. **Persistence & Repository Layer (`backend/app/repositories/`)**:
-   - `EvaluationRepository`: Manages SQL persistence for `evaluation_runs` and `evaluation_results` in SQLite.
-   - `EvaluationService`: High-level application service connecting dataset loading, runner execution, and database storage.
-
-4. **REST API & CLI Interfaces**:
-   - CLI: `probenest evaluate --dataset datasets/golden/example.json`
-   - API: `POST /api/v1/evaluations`, `GET /api/v1/evaluations`, `GET /api/v1/evaluations/{run_id}`
+3. **Evaluator Registry & Quality Service (`backend/app/evaluators/registry.py` & `backend/app/services/quality_service.py`)**:
+   - Resolves metric names (`"accuracy"`, `"relevance"`, `"faithfulness"`, `"hallucination"`, `"quality"`) to evaluator instances and produces metric summaries.
 
 ---
 
 ## Planned Architecture (Future Phases)
 
-In upcoming phases, Probenest will incorporate modular evaluation adapters, red-teaming suits, and scoring engines:
+In upcoming phases, Probenest will incorporate red-teaming suits, security scores, regression detection, and dashboard analytics:
 
 ```text
-Target AI Application (e.g. DemoRAG)
-                  ↓
-          TargetAdapter
-                  ↓
-          EvaluationRunner
-        ┌─────────┴─────────┐
-        ↓                   ↓
- Quality Engine      Red-Team Engine
-  - Accuracy          - Injection
-  - Faithfulness      - Jailbreak
-  - Hallucination     - Data Leakage
-        └─────────┬─────────┘
-                  ↓
-             ScoreEngine
-                  ↓
-             SQLite DB
-                  ↓
-              FastAPI
-                  ↓
-          React Dashboard
+Target AI Application (DemoRAG)
+           ↓
+    EvaluationRunner
+    ┌──────┴──────┐
+    ↓             ↓
+Quality Engine  Red-Team Engine (Phase 5)
+    └──────┬──────┘
+           ↓
+     Score Engine & Analytics (Phase 6+)
+           ↓
+     React Dashboard
 ```

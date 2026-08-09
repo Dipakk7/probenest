@@ -27,127 +27,91 @@ DEBUG=true
 DATABASE_URL=sqlite:///./probenest.db
 API_HOST=127.0.0.1
 API_PORT=8000
+DEMORAG_BASE_URL=http://127.0.0.1:8001
+EVALUATION_JUDGE_PROVIDER=mock
+EVALUATION_JUDGE_MODEL=qwen2.5:7b
 ```
 
 ---
 
 ## Backend Development
 
-### Setup Backend
-
-Navigate to the `backend` directory and install the package with development dependencies in editable mode:
-
 ```bash
 cd backend
 python -m pip install -e ".[dev]"
-```
-
-### Running Backend Server
-
-Start the FastAPI application with Uvicorn:
-
-```bash
-cd backend
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Once running, interactive API documentation is available at:
-- Swagger UI: `http://127.0.0.1:8000/docs`
-- ReDoc: `http://127.0.0.1:8000/redoc`
+FastAPI docs available at `http://127.0.0.1:8000/docs`.
 
 ---
 
-## Evaluation Core & CLI Usage
+## Running Quality Evaluations
 
-### Running Evaluation Pipeline via CLI
+### CLI Execution
 
-Phase 2 includes a real evaluation execution pipeline using `MockTargetAdapter` and `ExactMatchEvaluator`:
+Run the Quality Evaluation Engine across Accuracy, Relevance, Faithfulness, and Hallucination metrics:
 
 ```bash
-probenest evaluate --dataset ../datasets/golden/example.json
+# Evaluate mock target
+probenest evaluate --target mock --evaluators quality
+
+# Evaluate DemoRAG target (with DemoRAG server running on port 8001)
+probenest evaluate --target demorrag --dataset ../datasets/golden/rag.json --evaluators quality
 ```
 
 Output format:
 
 ```text
-PROBENEST EVALUATION
+PROBENEST QUALITY EVALUATION
 
-Target: default
-Dataset: datasets/golden/example.json
+Target: demorrag
+Dataset: datasets/golden/rag.json
 
-Run: run_86abebd0
+Run: run_fe0d9622
 Status: COMPLETED
-Cases: 5
-Passed: 4
-Failed: 1
+Cases: 10
 
-Results:
-  PASS qa_001 (ExactMatchEvaluator): Actual output exactly matches expected output.
-  PASS qa_002 (ExactMatchEvaluator): Actual output exactly matches expected output.
-  FAIL qa_003_fail (ExactMatchEvaluator): Mismatch...
-  PASS qa_004 (ExactMatchEvaluator): Actual output exactly matches expected output.
-  PASS qa_005 (ExactMatchEvaluator): Actual output exactly matches expected output.
+Accuracy
+  4/10 passed
+  Score: 0.40
+
+Relevance
+  10/10 passed
+  Score: 1.00
+
+Faithfulness
+  10/10 passed
+  Score: 1.00
+
+Hallucination
+  8/10 passed
+  Score: 0.80
 ```
 
 ---
 
-## Evaluation API Endpoints
+## API Usage
 
-- `POST /api/v1/evaluations` — Trigger a new evaluation run
-- `GET /api/v1/evaluations` — List historical evaluation runs
-- `GET /api/v1/evaluations/{run_id}` — Retrieve detailed evaluation run and case outcomes
+Trigger quality evaluation via REST API:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/evaluations \
+  -H "Content-Type: application/json" \
+  -d '{"target": "demorrag", "evaluators": ["accuracy", "relevance", "faithfulness", "hallucination"]}'
+```
 
 ---
 
-## Frontend Development
-
-### Setup Frontend
-
-Navigate to the `frontend` directory and install Node dependencies:
+## Testing & Quality
 
 ```bash
-cd frontend
-npm install
-```
+# Run backend tests
+cd backend && python -m pytest && python -m ruff check .
 
-### Running Frontend Development Server
+# Run DemoRAG tests
+cd demo_target/demo_rag && python -m pytest && python -m ruff check .
 
-Start Vite dev server:
-
-```bash
-cd frontend
-npm run dev
-```
-
-The frontend application will run at `http://localhost:5173`. It connects to the FastAPI backend at `http://127.0.0.1:8000` via the configured Vite proxy.
-
----
-
-## Testing & Linting
-
-### Backend Tests
-
-Run unit tests using Pytest:
-
-```bash
-cd backend
-python -m pytest
-```
-
-### Backend Linting
-
-Run static lint checks with Ruff:
-
-```bash
-cd backend
-python -m ruff check .
-```
-
-### Frontend Build
-
-Verify TypeScript compilation and Vite build:
-
-```bash
-cd frontend
-npm run build
+# Run frontend build
+cd frontend && npm run build
 ```

@@ -27,4 +27,4 @@ def test_trigger_and_get_evaluation_api() -> None:
     assert get_res.status_code == 200
     single_data = get_res.json()
     assert single_data["run_id"] == run_id
-    assert len(single_data["results"]) == 5
+    assert len(single_data["results"]) == 20  # 5 cases * 4 quality evaluators

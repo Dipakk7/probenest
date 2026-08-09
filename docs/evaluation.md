@@ -4,55 +4,38 @@
 
 Probenest evaluates AI applications across two primary pillars:
 
-1. **Quality Metrics**: Measuring functional behavior, semantic truthfulness, and domain accuracy.
-2. **Adversarial & Security Probes**: Testing resilience against prompt injections, security bypasses, and system boundary violations.
+1. **Quality Metrics**: Measuring functional behavior, semantic truthfulness, query relevance, context faithfulness, and hallucination grounding.
+2. **Adversarial & Security Probes**: Stress-testing resilience against prompt injections, jailbreaks, data leakage, and tool abuse.
 
 ---
 
-## Phase 2 Core Engine Architecture
+## Phase 4 Quality Engine Metrics
 
-Phase 2 introduces the foundational evaluation abstractions and pipeline workflow:
+Phase 4 implements four normalized quality metrics (scored `0.0` to `1.0`, where `1.0` = excellent/pass):
 
-```text
-EvaluationCase
-      ↓
-TargetAdapter (MockTargetAdapter)
-      ↓
-TargetResponse
-      ↓
-Evaluator (ExactMatchEvaluator)
-      ↓
-EvaluationResult
-      ↓
-EvaluationRun (Persisted to SQLite)
-```
+### 1. Accuracy (`AccuracyEvaluator`)
+- **Question**: Is the factual content of the answer semantically correct compared to ground truth?
+- **Method**: Layer 1 text normalization, Layer 2 exact/fuzzy matching, Layer 3 LLM judge fallback.
 
-### Core Abstractions
+### 2. Relevance (`RelevanceEvaluator`)
+- **Question**: Does the output directly address the user's question without off-topic filler?
+- **Method**: Evaluates query-response directness, penalizing unhelpful or off-topic responses.
 
-- **`EvaluationCase`**: Encapsulates prompt inputs, expected ground truth outputs, categories, tags, and expected context snippets.
-- **`TargetAdapter`**: Protocol interface decoupling evaluation logic from target AI application implementations.
-- **`ExactMatchEvaluator`**: Demonstration evaluator asserting exact text match between target output and expected output.
-- **`EvaluationRunner`**: Generic runner orchestrating case execution, evaluator invocation, and pass/fail metric collection.
+### 3. Faithfulness (`FaithfulnessEvaluator`)
+- **Question**: Are the claims in the answer supported by retrieved context snippets?
+- **Method**: Evaluates support of output claims strictly against `TargetResponse.context`.
+
+### 4. Hallucination Risk / Grounding (`HallucinationEvaluator`)
+- **Question**: Does the output contain unsupported or invented facts?
+- **Semantics**: **Score 1.0 = no hallucination / fully grounded**, **Score 0.0 = severe ungrounded hallucination**.
 
 ---
 
-## Planned Evaluation Categories (Future Phases)
+## Metric Comparison Table
 
-> [!NOTE]
-> Advanced evaluators (RAG faithfulness, LLM-as-a-judge, prompt injection probes, red-teaming) will be implemented in upcoming phases.
-
-### Quality Engine (Phase 3+)
-
-- **Accuracy**: Verifies whether model output aligns with expected ground truth in golden dataset benchmarks.
-- **Relevance**: Measures context adherence and query relevance to prevent off-topic generation.
-- **Faithfulness**: Validates whether retrieved context supports the model output in RAG pipelines.
-- **Hallucination Detection**: Flags unsupported claims or ungrounded assertions.
-- **Tool-Call Correctness**: Validates JSON arguments, function schemas, and execution responses.
-
-### Red-Team Engine (Phase 4+)
-
-- **Prompt Injection**: Injects instructions into user inputs or context streams to test model boundary integrity.
-- **Jailbreak Resistance**: Tests resilience against persona switches, prefix injection, and safety filter evasions.
-- **Instruction Override**: Evaluates system prompt retention under adversarial manipulation.
-- **Data Leakage**: Assesses prevention of internal system prompt disclosure or sensitive training data exposure.
-- **Tool Abuse**: Checks for unauthorized parameters or unauthorized actions executed via tool bindings.
+| Metric | Primary Question | Primary Inputs | Score 1.0 Meaning |
+| :--- | :--- | :--- | :--- |
+| **Accuracy** | Is the answer factually correct? | Input, Expected Output, Actual Output | Factually accurate answer |
+| **Relevance** | Does the answer address the question? | Input, Actual Output | Directly relevant response |
+| **Faithfulness** | Are claims supported by context? | Actual Output, Retrieved Context | Claims fully supported by context |
+| **Hallucination** | Are there ungrounded claims? | Actual Output, Retrieved Context | Fully grounded (no hallucination) |
