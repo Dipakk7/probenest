@@ -2,6 +2,8 @@ from pathlib import Path
 
 import typer
 
+from app.adapters.demo_rag import DemoRAGAdapter
+from app.adapters.mock_target import MockTargetAdapter
 from app.db.database import SessionLocal, init_db
 from app.loaders.dataset import DatasetLoadError
 from app.services.evaluation_service import EvaluationService
@@ -23,9 +25,9 @@ def main(ctx: typer.Context) -> None:
 
 @app.command("evaluate")
 def evaluate(
-    target: str = typer.Option("default", "--target", "-t", help="Target AI application identifier"),
-    dataset: str = typer.Option(
-        "../datasets/golden/example.json",
+    target: str = typer.Option("mock", "--target", "-t", help="Target AI application identifier ('mock' or 'demorrag')"),
+    dataset: str | None = typer.Option(
+        None,
         "--dataset",
         "-d",
         help="Evaluation dataset JSON file path",
@@ -33,12 +35,22 @@ def evaluate(
     debug: bool = typer.Option(False, "--debug", help="Enable verbose debug output and tracebacks"),
 ) -> None:
     """Run AI evaluation pipeline against target application using specified dataset."""
-    dataset_path = Path(dataset)
-    if not dataset_path.is_file():
-        # Fallback check relative to repo root
-        root_dataset_path = Path(__file__).resolve().parent.parent.parent / "datasets" / "golden" / "example.json"
-        if root_dataset_path.is_file():
-            dataset_path = root_dataset_path
+    target_key = target.lower()
+    if target_key in ["demorrag", "rag"]:
+        target_adapter = DemoRAGAdapter()
+        default_dataset_rel = "rag.json"
+    else:
+        target_adapter = MockTargetAdapter()
+        default_dataset_rel = "example.json"
+
+    if dataset:
+        dataset_path = Path(dataset)
+    else:
+        # Default relative search
+        root_dir = Path(__file__).resolve().parents[3]
+        dataset_path = root_dir / "datasets" / "golden" / default_dataset_rel
+        if not dataset_path.is_file():
+            dataset_path = Path(f"../datasets/golden/{default_dataset_rel}")
 
     typer.echo("PROBENEST EVALUATION\n")
     typer.echo(f"Target: {target}")
@@ -48,7 +60,10 @@ def evaluate(
     db = SessionLocal()
     try:
         service = EvaluationService(db)
-        run_record = service.run_evaluation(dataset_path_or_cases=dataset_path)
+        run_record = service.run_evaluation(
+            dataset_path_or_cases=dataset_path,
+            target_adapter=target_adapter,
+        )
 
         typer.echo(f"Run: {run_record.run_id}")
         typer.echo(f"Status: {run_record.status.value.upper()}")

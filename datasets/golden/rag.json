@@ -1,0 +1,102 @@
+[
+  {
+    "id": "rag_001",
+    "input": "What is the return period for refunds?",
+    "expected_output": "Customers can request a refund within 30 days of purchase.",
+    "category": "factual",
+    "tags": ["returns", "policy"],
+    "metadata": {
+      "expected_source": "refund_policy"
+    }
+  },
+  {
+    "id": "rag_002",
+    "input": "How long does standard domestic shipping take?",
+    "expected_output": "Standard domestic shipping takes 3 to 5 business days.",
+    "category": "factual",
+    "tags": ["shipping"],
+    "metadata": {
+      "expected_source": "shipping_policy"
+    }
+  },
+  {
+    "id": "rag_003",
+    "input": "What are customer support operating hours?",
+    "expected_output": "Our customer support team is available Monday through Friday from 8:00 AM to 8:00 PM EST.",
+    "category": "factual",
+    "tags": ["support", "hours"],
+    "metadata": {
+      "expected_source": "support_policy"
+    }
+  },
+  {
+    "id": "rag_004",
+    "input": "How do I reset my password if I forgot it?",
+    "expected_output": "Click on 'Forgot Password' on the login screen to reset your password.",
+    "category": "retrieval",
+    "tags": ["account", "password"],
+    "metadata": {
+      "expected_source": "account_policy"
+    }
+  },
+  {
+    "id": "rag_005",
+    "input": "What data encryption standard is used at rest?",
+    "expected_output": "All customer data in transit is protected using TLS 1.3 encryption protocols.",
+    "category": "retrieval",
+    "tags": ["security", "encryption"],
+    "metadata": {
+      "expected_source": "security_policy"
+    }
+  },
+  {
+    "id": "rag_006",
+    "input": "Do you offer stock trading or financial investment advice?",
+    "expected_output": "I am sorry, but the requested information is not available in the provided context.",
+    "category": "unknown",
+    "tags": ["out_of_bounds"],
+    "metadata": {
+      "expected_source": null
+    }
+  },
+  {
+    "id": "rag_007",
+    "input": "What is the guaranteed response window for enterprise support customers?",
+    "expected_output": "Our customer support team is available Monday through Friday from 8:00 AM to 8:00 PM EST.",
+    "category": "factual",
+    "tags": ["support", "enterprise"],
+    "metadata": {
+      "expected_source": "support_policy"
+    }
+  },
+  {
+    "id": "rag_008",
+    "input": "Is international shipping supported?",
+    "expected_output": "Standard domestic shipping takes 3 to 5 business days.",
+    "category": "edge_case",
+    "tags": ["shipping", "international"],
+    "metadata": {
+      "expected_source": "shipping_policy"
+    }
+  },
+  {
+    "id": "rag_009",
+    "input": "What happens after 14 days of requesting account deletion?",
+    "expected_output": "Click on 'Forgot Password' on the login screen to reset your password.",
+    "category": "edge_case",
+    "tags": ["account", "deletion"],
+    "metadata": {
+      "expected_source": "account_policy"
+    }
+  },
+  {
+    "id": "rag_10_fail",
+    "input": "Can I request a refund after 100 days?",
+    "expected_output": "Refund requests after 30 days are automatically rejected without review.",
+    "category": "edge_case",
+    "tags": ["refund", "edge"],
+    "metadata": {
+      "expected_source": "refund_policy"
+    }
+  }
+]
