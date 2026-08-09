@@ -1,0 +1,37 @@
+[
+  {
+    "id": "qa_001",
+    "input": "What is the return policy?",
+    "expected_output": "Customers can request a full refund within 30 days of purchase.",
+    "category": "quality",
+    "tags": ["returns", "policy"]
+  },
+  {
+    "id": "qa_002",
+    "input": "How do I reset my password?",
+    "expected_output": "Click on 'Forgot Password' on the login screen and follow the instructions sent to your email.",
+    "category": "quality",
+    "tags": ["account", "auth"]
+  },
+  {
+    "id": "qa_003_fail",
+    "input": "What are your business operating hours?",
+    "expected_output": "Our support team is available 24/7 Monday through Sunday.",
+    "category": "quality",
+    "tags": ["hours", "support"]
+  },
+  {
+    "id": "qa_004",
+    "input": "Where is the company headquarters located?",
+    "expected_output": "Probenest headquarters is located in San Francisco, California.",
+    "category": "quality",
+    "tags": ["company", "info"]
+  },
+  {
+    "id": "qa_005",
+    "input": "Is international shipping supported?",
+    "expected_output": "Yes, we ship internationally to over 50 countries worldwide.",
+    "category": "quality",
+    "tags": ["shipping"]
+  }
+]

@@ -35,11 +35,11 @@ API_PORT=8000
 
 ### Setup Backend
 
-Navigate to the `backend` directory and install the package in editable mode:
+Navigate to the `backend` directory and install the package with development dependencies in editable mode:
 
 ```bash
 cd backend
-python -m pip install -e .
+python -m pip install -e ".[dev]"
 ```
 
 ### Running Backend Server
@@ -55,16 +55,47 @@ Once running, interactive API documentation is available at:
 - Swagger UI: `http://127.0.0.1:8000/docs`
 - ReDoc: `http://127.0.0.1:8000/redoc`
 
-### CLI Usage
+---
 
-The `probenest` command is installed in your Python environment:
+## Evaluation Core & CLI Usage
+
+### Running Evaluation Pipeline via CLI
+
+Phase 2 includes a real evaluation execution pipeline using `MockTargetAdapter` and `ExactMatchEvaluator`:
 
 ```bash
-probenest --help
-probenest evaluate --help
-probenest redteam --help
-probenest compare --help
+probenest evaluate --dataset ../datasets/golden/example.json
 ```
+
+Output format:
+
+```text
+PROBENEST EVALUATION
+
+Target: default
+Dataset: datasets/golden/example.json
+
+Run: run_86abebd0
+Status: COMPLETED
+Cases: 5
+Passed: 4
+Failed: 1
+
+Results:
+  PASS qa_001 (ExactMatchEvaluator): Actual output exactly matches expected output.
+  PASS qa_002 (ExactMatchEvaluator): Actual output exactly matches expected output.
+  FAIL qa_003_fail (ExactMatchEvaluator): Mismatch...
+  PASS qa_004 (ExactMatchEvaluator): Actual output exactly matches expected output.
+  PASS qa_005 (ExactMatchEvaluator): Actual output exactly matches expected output.
+```
+
+---
+
+## Evaluation API Endpoints
+
+- `POST /api/v1/evaluations` — Trigger a new evaluation run
+- `GET /api/v1/evaluations` — List historical evaluation runs
+- `GET /api/v1/evaluations/{run_id}` — Retrieve detailed evaluation run and case outcomes
 
 ---
 
@@ -100,7 +131,7 @@ Run unit tests using Pytest:
 
 ```bash
 cd backend
-pytest
+python -m pytest
 ```
 
 ### Backend Linting
@@ -109,7 +140,7 @@ Run static lint checks with Ruff:
 
 ```bash
 cd backend
-ruff check .
+python -m ruff check .
 ```
 
 ### Frontend Build

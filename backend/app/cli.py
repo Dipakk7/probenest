@@ -1,4 +1,10 @@
+from pathlib import Path
+
 import typer
+
+from app.db.database import SessionLocal, init_db
+from app.loaders.dataset import DatasetLoadError
+from app.services.evaluation_service import EvaluationService
 
 app = typer.Typer(
     name="probenest",
@@ -18,12 +24,57 @@ def main(ctx: typer.Context) -> None:
 @app.command("evaluate")
 def evaluate(
     target: str = typer.Option("default", "--target", "-t", help="Target AI application identifier"),
-    dataset: str = typer.Option("golden", "--dataset", "-d", help="Evaluation dataset path or name"),
+    dataset: str = typer.Option(
+        "../datasets/golden/example.json",
+        "--dataset",
+        "-d",
+        help="Evaluation dataset JSON file path",
+    ),
+    debug: bool = typer.Option(False, "--debug", help="Enable verbose debug output and tracebacks"),
 ) -> None:
-    """Run AI evaluation pipeline against target application."""
-    typer.echo(f"Evaluating target '{target}' using dataset '{dataset}'...")
-    typer.echo("Probenest evaluation engine is not implemented yet.")
-    typer.echo("Available in a future phase.")
+    """Run AI evaluation pipeline against target application using specified dataset."""
+    dataset_path = Path(dataset)
+    if not dataset_path.is_file():
+        # Fallback check relative to repo root
+        root_dataset_path = Path(__file__).resolve().parent.parent.parent / "datasets" / "golden" / "example.json"
+        if root_dataset_path.is_file():
+            dataset_path = root_dataset_path
+
+    typer.echo("PROBENEST EVALUATION\n")
+    typer.echo(f"Target: {target}")
+    typer.echo(f"Dataset: {dataset_path}\n")
+
+    init_db()
+    db = SessionLocal()
+    try:
+        service = EvaluationService(db)
+        run_record = service.run_evaluation(dataset_path_or_cases=dataset_path)
+
+        typer.echo(f"Run: {run_record.run_id}")
+        typer.echo(f"Status: {run_record.status.value.upper()}")
+        typer.echo(f"Cases: {run_record.total_cases}")
+        typer.echo(f"Passed: {run_record.passed_cases}")
+        typer.echo(f"Failed: {run_record.failed_cases}\n")
+
+        typer.echo("Results:")
+        for res in run_record.results:
+            status_label = "PASS" if res.passed else "FAIL"
+            color = typer.colors.GREEN if res.passed else typer.colors.RED
+            formatted_status = typer.style(f"  {status_label}", fg=color, bold=True)
+            typer.echo(f"{formatted_status} {res.test_id} ({res.evaluator}): {res.reason}")
+
+    except DatasetLoadError as e:
+        typer.echo(typer.style(f"Dataset Error: {e}", fg=typer.colors.RED, bold=True), err=True)
+        if debug:
+            raise
+        raise typer.Exit(code=1)
+    except Exception as e:
+        typer.echo(typer.style(f"Evaluation Error: {e}", fg=typer.colors.RED, bold=True), err=True)
+        if debug:
+            raise
+        raise typer.Exit(code=1)
+    finally:
+        db.close()
 
 
 @app.command("redteam")

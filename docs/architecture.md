@@ -4,24 +4,51 @@
 
 Probenest is an Adversarial AI Evaluation & Reliability Platform designed to assess AI applications for quality (accuracy, faithfulness, hallucination, tool usage) and security (prompt injection, jailbreaks, instruction overrides, data leakage, tool abuse).
 
-## Phase 1 Architecture (Foundation)
+---
 
-The current foundational architecture establishes the client-server setup and core infrastructure:
+## Phase 2 Architecture (Evaluation Core)
+
+Phase 2 establishes the core evaluation domain models, runner orchestration, SQLite persistence layer, and deterministic demonstration target/evaluators:
 
 ```text
-React + Vite Frontend (TypeScript)
-            ↓ HTTP GET /health
- FastAPI Backend (Python 3.11+)
-            ↓
-  SQLite Database Engine
+               EvaluationCase
+                     │
+                     ↓
+               TargetAdapter (e.g. MockTargetAdapter)
+                     │
+                     ↓
+               TargetResponse
+                     │
+                     ↓
+               Evaluator (e.g. ExactMatchEvaluator)
+                     │
+                     ↓
+               EvaluationResult
+                     │
+                     ↓
+               EvaluationRun (SQLite Persistence)
 ```
 
-### Core Components
+### Core Architecture Components
 
-1. **Frontend**: React + TypeScript application built with Vite and styled using Tailwind CSS. Provides the landing dashboard and status monitoring.
-2. **FastAPI Application**: High-performance REST API providing application health checks, API endpoints, and configuration lifecycle management.
-3. **Database Foundation**: SQLite ORM layer powered by SQLAlchemy 2.x for lightweight, local state persistence without external service dependencies.
-4. **CLI Framework**: Command Line Interface built with Typer allowing developers to initiate evaluation and red-teaming tasks locally.
+1. **Domain Abstractions (`backend/app/domain/`)**:
+   - `EvaluationCase`: Represents individual input/expected output evaluation test cases.
+   - `TargetResponse`: Encapsulates output text, context, tool calls, and execution metadata.
+   - `TargetAdapter`: Protocol interface enabling decoupled interaction with target applications.
+   - `Evaluator`: Protocol interface defining evaluation metrics and probes.
+   - `EvaluationResult`: Standardized case outcome payload (pass/fail, score, reason, evidence).
+   - `EvaluationRun`: Complete run metadata and case results container.
+
+2. **Runner Engine (`backend/app/runner/`)**:
+   - `EvaluationRunner`: Orchestrates dispatching evaluation cases against target adapters, invoking generic evaluators, aggregating results, and reporting run completion.
+
+3. **Persistence & Repository Layer (`backend/app/repositories/`)**:
+   - `EvaluationRepository`: Manages SQL persistence for `evaluation_runs` and `evaluation_results` in SQLite.
+   - `EvaluationService`: High-level application service connecting dataset loading, runner execution, and database storage.
+
+4. **REST API & CLI Interfaces**:
+   - CLI: `probenest evaluate --dataset datasets/golden/example.json`
+   - API: `POST /api/v1/evaluations`, `GET /api/v1/evaluations`, `GET /api/v1/evaluations/{run_id}`
 
 ---
 
@@ -51,12 +78,3 @@ Target AI Application (e.g. DemoRAG)
                   ↓
           React Dashboard
 ```
-
-### Planned System Subcomponents
-
-- **TargetAdapter**: Abstraction layer for interacting with target LLM applications, RAG pipelines, or APIs.
-- **EvaluationRunner**: Orchestration engine for dispatching evaluation datasets against target applications.
-- **QualityEvaluators**: Rule-based and LLM-assisted metrics for precision, ground-truth alignment, and hallucination detection.
-- **RedTeamEngine**: Adversarial payload generator and probe injector to stress-test robustness.
-- **ScoreEngine**: Aggregator computing safety indices, quality scores, and regression analysis across test runs.
-- **RegressionEngine**: Comparison engine flagging metric drops across model or prompt updates.

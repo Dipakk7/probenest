@@ -10,56 +10,45 @@ Probenest is a standalone AI evaluation and adversarial testing platform designe
 
 Probenest provides automated evaluation and red-teaming pipelines for LLMs, RAG systems, and AI agent frameworks. It measures model quality metrics while stress-testing applications against security vulnerabilities and instruction overrides.
 
-> [!NOTE]
-> Probenest is currently in active development. **Phase 1 (Foundation)** establishes the core architecture, backend services, SQLite ORM layer, CLI interface, and frontend dashboard shell. Full evaluation engines will be implemented in upcoming phases.
+---
+
+## 2. Current Status
+
+- [x] **Phase 1 — Foundation**: FastAPI REST backend, SQLite ORM foundation, Pydantic settings, Typer CLI, React + Vite frontend shell, Pytest & Ruff quality tooling.
+- [x] **Phase 2 — Evaluation Core**: Domain models (`EvaluationCase`, `TargetResponse`, `EvaluationResult`, `EvaluationRun`), `TargetAdapter` protocol, `Evaluator` protocol, `EvaluationRunner`, SQLite persistence, dataset loader, `MockTargetAdapter`, `ExactMatchEvaluator`, CLI `probenest evaluate`, and REST API endpoints (`/api/v1/evaluations`).
 
 ---
 
-## 2. Problem
-
-Modern AI applications suffer from:
-- **Unreliable Quality**: Hallucinations, ungrounded responses, and context deviation in RAG systems.
-- **Security Vulnerabilities**: Susceptibility to prompt injections, system prompt extraction, and jailbreak vectors.
-- **Silent Regressions**: Model updates or prompt tweaks degrading output quality without notice.
-
-Probenest addresses these challenges by offering automated evaluation benchmarks and red-team probe suites.
-
----
-
-## 3. Current Status (Phase 1)
-
-Phase 1 Foundation includes:
-- [x] Python FastAPI REST backend (`GET /health`, OpenAPI specs at `/docs`)
-- [x] SQLite database ORM foundation powered by SQLAlchemy 2.x
-- [x] Pydantic v2 settings & environment management
-- [x] Command Line Interface (`probenest --help`, `probenest evaluate --help`, `probenest redteam --help`, `probenest compare --help`)
-- [x] React + TypeScript + Vite frontend with Tailwind CSS
-- [x] Automated test suite (Pytest) and Ruff static analysis
-- [x] GitHub Actions CI pipeline
-
----
-
-## 4. Architecture
+## 3. Architecture
 
 ```text
-Target AI Application
-        ↓
-Evaluation Runner (Phase 2+)
-        ↓
-Quality Engine + Red-Team Engine (Phase 2+)
-        ↓
-Score Engine (Phase 3+)
-        ↓
-     SQLite DB
-        ↓
-   FastAPI Server
-        ↓
-  React Dashboard
+               EvaluationCase
+                     │
+                     ↓
+               TargetAdapter (e.g. MockTargetAdapter)
+                     │
+                     ↓
+               TargetResponse
+                     │
+                     ↓
+               Evaluator (e.g. ExactMatchEvaluator)
+                     │
+                     ↓
+               EvaluationResult
+                     │
+                     ↓
+               EvaluationRun (SQLite DB)
+                     │
+                     ↓
+               FastAPI REST API
+                     │
+                     ↓
+               React Dashboard
 ```
 
 ---
 
-## 5. Tech Stack
+## 4. Tech Stack
 
 - **Backend**: Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2.x, SQLite, Typer CLI
 - **Frontend**: React, TypeScript, Vite, Tailwind CSS
@@ -67,89 +56,7 @@ Score Engine (Phase 3+)
 
 ---
 
-## 6. Project Structure
-
-```text
-probenest/
-│
-├── backend/
-│   ├── app/
-│   │   ├── api/
-│   │   │   ├── __init__.py
-│   │   │   └── routes/
-│   │   │       ├── __init__.py
-│   │   │       └── health.py
-│   │   │
-│   │   ├── core/
-│   │   │   ├── __init__.py
-│   │   │   ├── config.py
-│   │   │   └── logging.py
-│   │   │
-│   │   ├── db/
-│   │   │   ├── __init__.py
-│   │   │   ├── database.py
-│   │   │   └── models.py
-│   │   │
-│   │   ├── models/
-│   │   │   └── __init__.py
-│   │   │
-│   │   ├── services/
-│   │   │   └── __init__.py
-│   │   │
-│   │   ├── cli.py
-│   │   └── main.py
-│   │
-│   ├── tests/
-│   │   ├── __init__.py
-│   │   ├── test_config.py
-│   │   ├── test_db.py
-│   │   └── test_health.py
-│   │
-│   └── pyproject.toml
-│
-├── frontend/
-│   ├── src/
-│   │   ├── api/
-│   │   │   └── client.ts
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── lib/
-│   │   │   └── utils.ts
-│   │   ├── types/
-│   │   │   └── health.ts
-│   │   ├── App.tsx
-│   │   ├── index.css
-│   │   └── main.tsx
-│   │
-│   ├── public/
-│   ├── package.json
-│   ├── tsconfig.json
-│   ├── vite.config.ts
-│   └── index.html
-│
-├── datasets/
-│   ├── golden/
-│   └── redteam/
-│
-├── demo_target/
-├── docs/
-│   ├── architecture.md
-│   ├── development.md
-│   └── evaluation.md
-│
-├── .github/
-│   └── workflows/
-│       └── ci.yml
-│
-├── .env.example
-├── .gitignore
-├── README.md
-└── Makefile
-```
-
----
-
-## 7. Local Setup
+## 5. Local Setup
 
 ### Environment Setup
 
@@ -161,11 +68,11 @@ cp .env.example .env
 
 ---
 
-## 8. Running Backend
+## 6. Running Backend & API
 
 ```bash
 cd backend
-python -m pip install -e .
+python -m pip install -e ".[dev]"
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -173,7 +80,23 @@ FastAPI docs are available at `http://127.0.0.1:8000/docs`.
 
 ---
 
-## 9. Running Frontend
+## 7. Running Evaluation Pipeline
+
+### CLI Evaluation
+
+```bash
+probenest evaluate --dataset datasets/golden/example.json
+```
+
+### API Evaluation
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/evaluations
+```
+
+---
+
+## 8. Running Frontend
 
 ```bash
 cd frontend
@@ -185,41 +108,20 @@ Dashboard access at `http://localhost:5173`.
 
 ---
 
-## 10. Running Tests
+## 9. Running Tests & Linter
 
 ```bash
 cd backend
-pytest
-ruff check .
+python -m pytest
+python -m ruff check .
 ```
 
 ---
 
-## 11. CLI
+## 10. Development Roadmap
 
-Execute CLI commands:
-
-```bash
-probenest --help
-probenest evaluate --help
-probenest redteam --help
-probenest compare --help
-```
-
----
-
-## 12. Development Roadmap
-
-- **Phase 1: Foundation** (Current Phase - Project structure, FastAPI, SQLite DB, CLI, React UI shell)
-- **Phase 2: Evaluation Core** (Target Adapters, Evaluation Runners, Quality Evaluators)
-- **Phase 3: Red-Team Engine** (Adversarial probes, Injection payloads, Vulnerability scores)
-- **Phase 4: Score Engine & Analytics** (Regression detection, Detailed metrics, Dashboard analytics)
-
----
-
-## 13. Scope Constraints
-
-Phase 1 strictly omits:
-- Heavy container/orchestration setups (Docker, K8s, Celery, Redis)
-- External databases (PostgreSQL)
-- Real AI evaluation models or live target integration
+- [x] **Phase 1: Foundation** (Project structure, FastAPI, SQLite DB, CLI, React UI shell)
+- [x] **Phase 2: Evaluation Core** (Domain abstractions, Target adapters, Evaluator interfaces, Runner engine, SQLite persistence, REST API, CLI evaluation)
+- [ ] **Phase 3: Quality Engine & DemoRAG** (Accuracy, Faithfulness, Hallucination evaluators, Target integrations)
+- [ ] **Phase 4: Red-Team Engine** (Adversarial probes, Injection payloads, Vulnerability scores)
+- [ ] **Phase 5: Score Engine & Analytics** (Regression detection, Detailed metrics, Dashboard analytics)

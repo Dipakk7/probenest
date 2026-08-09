@@ -1,12 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import { checkHealth } from './api/client';
-import { ConnectionState, HealthResponse } from './types/health';
-import { ShieldCheck, ShieldAlert, RefreshCw, Cpu, Activity, Database, Terminal } from 'lucide-react';
+import { checkHealth, triggerEvaluation } from './api/client';
+import { ConnectionState, EvaluationRunData, HealthResponse } from './types/health';
+import {
+  ShieldCheck,
+  ShieldAlert,
+  RefreshCw,
+  Cpu,
+  Activity,
+  Database,
+  Play,
+  CheckCircle2,
+  XCircle,
+  Clock,
+} from 'lucide-react';
 
 export const App: React.FC = () => {
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
   const [healthData, setHealthData] = useState<HealthResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Evaluation trigger state
+  const [evalRunState, setEvalRunState] = useState<ConnectionState>('idle');
+  const [lastRun, setLastRun] = useState<EvaluationRunData | null>(null);
+  const [evalError, setEvalError] = useState<string | null>(null);
 
   const fetchBackendHealth = async () => {
     setConnectionState('loading');
@@ -21,6 +37,23 @@ export const App: React.FC = () => {
         setErrorMessage(err.message);
       } else {
         setErrorMessage('Failed to connect to backend server');
+      }
+    }
+  };
+
+  const handleRunEvaluation = async () => {
+    setEvalRunState('loading');
+    setEvalError(null);
+    try {
+      const run = await triggerEvaluation();
+      setLastRun(run);
+      setEvalRunState('success');
+    } catch (err: unknown) {
+      setEvalRunState('error');
+      if (err instanceof Error) {
+        setEvalError(err.message);
+      } else {
+        setEvalError('Failed to execute evaluation run');
       }
     }
   };
@@ -81,80 +114,118 @@ export const App: React.FC = () => {
       </header>
 
       {/* Main Content Shell */}
-      <main className="max-w-4xl mx-auto px-6 py-16 flex-1 flex flex-col justify-center items-center text-center z-10">
-        <div className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-indigo-950/60 border border-indigo-800/50 text-indigo-300 text-xs font-semibold uppercase tracking-widest mb-8 backdrop-blur-sm">
+      <main className="max-w-4xl mx-auto px-6 py-12 flex-1 flex flex-col justify-center items-center text-center z-10">
+        <div className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-indigo-950/60 border border-indigo-800/50 text-indigo-300 text-xs font-semibold uppercase tracking-widest mb-6 backdrop-blur-sm">
           <Activity className="h-3.5 w-3.5 text-indigo-400" />
-          <span>Phase 1 — Foundation</span>
+          <span>Phase 2 — Evaluation Core</span>
         </div>
 
-        <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white mb-6">
+        <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white mb-4">
           PROBENEST
         </h1>
 
-        <p className="text-xl md:text-2xl font-medium text-slate-300 max-w-2xl leading-relaxed mb-12">
+        <p className="text-lg md:text-xl font-medium text-slate-300 max-w-2xl leading-relaxed mb-10">
           Adversarial AI Evaluation &amp; Reliability Platform
         </p>
 
-        {/* Foundation Info Card */}
-        <div className="w-full glass-panel rounded-2xl p-8 border border-slate-800 text-left shadow-2xl space-y-6">
+        {/* Evaluation Core Demonstration Container */}
+        <div className="w-full glass-panel rounded-2xl p-8 border border-slate-800 text-left shadow-2xl space-y-6 mb-8">
           <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-            <h2 className="text-lg font-semibold text-white flex items-center space-x-2">
-              <Cpu className="h-5 w-5 text-indigo-400" />
-              <span>System Readiness Overview</span>
-            </h2>
-            <span className="text-xs px-2.5 py-1 rounded bg-slate-800 text-slate-400 font-mono">v0.1.0</span>
+            <div>
+              <h2 className="text-lg font-semibold text-white flex items-center space-x-2">
+                <Cpu className="h-5 w-5 text-indigo-400" />
+                <span>Evaluation Core Engine</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Target: <code className="font-mono text-indigo-300">MockTargetAdapter</code> &bull; Evaluator: <code className="font-mono text-indigo-300">ExactMatchEvaluator</code>
+              </p>
+            </div>
+
+            <button
+              onClick={handleRunEvaluation}
+              disabled={evalRunState === 'loading' || connectionState === 'error'}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium text-xs shadow-lg shadow-indigo-500/25 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {evalRunState === 'loading' ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span>Running Evaluation...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 fill-current" />
+                  <span>Run Example Evaluation</span>
+                </>
+              )}
+            </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800/80">
-              <div className="flex items-center space-x-2 text-slate-400 text-xs font-medium mb-1">
-                <Activity className="h-3.5 w-3.5 text-indigo-400" />
-                <span>Backend Service</span>
-              </div>
-              <div className="text-sm font-semibold text-slate-200">
-                {connectionState === 'success' ? healthData?.service : 'probenest'}
-              </div>
-            </div>
-
-            <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800/80">
-              <div className="flex items-center space-x-2 text-slate-400 text-xs font-medium mb-1">
-                <Database className="h-3.5 w-3.5 text-emerald-400" />
-                <span>Database Engine</span>
-              </div>
-              <div className="text-sm font-semibold text-slate-200">
-                SQLite Foundation
-              </div>
-            </div>
-
-            <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800/80">
-              <div className="flex items-center space-x-2 text-slate-400 text-xs font-medium mb-1">
-                <Terminal className="h-3.5 w-3.5 text-purple-400" />
-                <span>CLI Engine</span>
-              </div>
-              <div className="text-sm font-semibold text-slate-200">
-                Typer Integration
-              </div>
-            </div>
-          </div>
-
-          {/* Connection Status Details */}
-          <div className="pt-2">
-            {connectionState === 'success' && (
-              <div className="p-4 rounded-xl bg-emerald-950/30 border border-emerald-800/40 text-emerald-300 text-sm flex items-center justify-between">
-                <span className="flex items-center space-x-2">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                  <span>FastAPI health check operational at <code className="font-mono text-xs text-emerald-200">/health</code></span>
+          {/* Last Run Summary Section */}
+          {lastRun && (
+            <div className="p-5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-4">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span className="font-mono text-slate-300">Run ID: {lastRun.run_id}</span>
+                <span className="flex items-center space-x-1">
+                  <Clock className="h-3.5 w-3.5 text-slate-400" />
+                  <span>Status: <strong className="text-emerald-400 capitalize">{lastRun.status}</strong></span>
                 </span>
-                <span className="text-xs text-emerald-400 font-mono">200 OK</span>
               </div>
-            )}
 
-            {connectionState === 'error' && (
-              <div className="p-4 rounded-xl bg-rose-950/30 border border-rose-800/40 text-rose-300 text-sm flex items-center justify-between">
-                <span>{errorMessage || 'Unable to reach backend endpoint'}</span>
-                <span className="text-xs text-rose-400 font-mono">Connection Error</span>
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+                  <span className="text-xs text-slate-400 block mb-1">Total Cases</span>
+                  <span className="text-xl font-bold text-white">{lastRun.total_cases}</span>
+                </div>
+
+                <div className="bg-emerald-950/30 p-3 rounded-lg border border-emerald-900/50">
+                  <span className="text-xs text-emerald-400 block mb-1 flex items-center justify-center space-x-1">
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span>Passed</span>
+                  </span>
+                  <span className="text-xl font-bold text-emerald-300">{lastRun.passed_cases}</span>
+                </div>
+
+                <div className="bg-rose-950/30 p-3 rounded-lg border border-rose-900/50">
+                  <span className="text-xs text-rose-400 block mb-1 flex items-center justify-center space-x-1">
+                    <XCircle className="h-3 w-3" />
+                    <span>Failed</span>
+                  </span>
+                  <span className="text-xl font-bold text-rose-300">{lastRun.failed_cases}</span>
+                </div>
               </div>
-            )}
+            </div>
+          )}
+
+          {connectionState === 'error' && (
+            <div className="p-4 rounded-xl bg-rose-950/30 border border-rose-800/40 text-rose-300 text-sm flex items-center justify-between">
+              <span>{errorMessage || 'Unable to reach backend endpoint'}</span>
+              <span className="text-xs text-rose-400 font-mono">Connection Error</span>
+            </div>
+          )}
+
+          {evalError && (
+            <div className="p-4 rounded-xl bg-rose-950/30 border border-rose-800/40 text-rose-300 text-sm">
+              {evalError}
+            </div>
+          )}
+
+          {!lastRun && evalRunState === 'idle' && (
+            <p className="text-xs text-slate-400 italic">
+              Click &quot;Run Example Evaluation&quot; to execute deterministic test cases against the core evaluation runner.
+            </p>
+          )}
+        </div>
+
+        {/* System Overview Card */}
+        <div className="w-full glass-panel rounded-2xl p-6 border border-slate-800 text-left shadow-lg space-y-4">
+          <h3 className="text-sm font-semibold text-slate-300 flex items-center space-x-2">
+            <Database className="h-4 w-4 text-indigo-400" />
+            <span>Infrastructure Status</span>
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs text-slate-400">
+            <div>Backend: <span className="text-slate-200 font-medium">{healthData?.service || 'probenest'}</span></div>
+            <div>Persistence: <span className="text-slate-200 font-medium">SQLite DB</span></div>
+            <div>CLI: <span className="text-slate-200 font-medium">probenest evaluate</span></div>
           </div>
         </div>
       </main>
