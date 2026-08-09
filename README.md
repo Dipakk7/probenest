@@ -8,7 +8,7 @@ Probenest is a standalone AI evaluation and adversarial testing platform designe
 
 ## 1. Overview
 
-Probenest provides automated evaluation and red-teaming pipelines for LLMs, RAG systems, and AI agent frameworks. It measures model quality metrics while stress-testing applications against security vulnerabilities and instruction overrides.
+Probenest provides automated evaluation, adversarial red-teaming pipelines, deterministic score engines, regression detection, reporting generators (JSON v1.0 & Markdown), and a web dashboard for LLMs, RAG systems, and AI agent frameworks.
 
 ---
 
@@ -19,98 +19,93 @@ Probenest provides automated evaluation and red-teaming pipelines for LLMs, RAG 
 - [x] **Phase 3 — DemoRAG Target Application**: Fictional reference RAG application (`demo_target/demo_rag/`), document loader & chunker, TF-IDF retriever, LLM provider abstraction (`MockLLMProvider`, `OllamaProvider`), RAG pipeline, FastAPI endpoints, Probenest `DemoRAGAdapter`.
 - [x] **Phase 4 — Quality Evaluation Engine**: `AccuracyEvaluator`, `RelevanceEvaluator`, `FaithfulnessEvaluator`, `HallucinationEvaluator`, `EvaluationJudge` abstraction (`MockEvaluationJudge`, `OllamaEvaluationJudge`), Evaluator Registry, CLI quality breakdown, API evaluator selection.
 - [x] **Phase 5 — Adversarial Red-Team Engine**: `RedTeamCase`, `AttackCategory`, `Severity`, `RedTeamResult`, `RedTeamRun`, 5 Red-Team Evaluators (Prompt Injection, Jailbreak, Instruction Override, Data Leakage, Tool Abuse), attack datasets in `datasets/redteam/`, `RedTeamRunner`, SQLite persistence, CLI `probenest redteam`, REST API endpoints (`/api/v1/redteam`).
+- [x] **Phase 6 — Score Engine & Regression Detection**: Deterministic `ScoreEngine` (Quality, Severity-Weighted Security, Overall Reliability), `RegressionEngine` (Metric Deltas, Test Failure Transitions, Severity Alerting), SQLite `run_scores` table, CLI `probenest score` & `probenest compare`, REST scoring endpoints.
+- [x] **Phase 7 — Reporting Engine & Engineering CLI**: Structured `RunReport` (JSON Schema v1.0 & Markdown), `ReportService`, missing data handling (`N/A`), standardized exit codes (0 = Success/No Regression, 1 = Regression, 2 = Invalid Args, 3 = Runtime Error), CLI `probenest report`, `--output` and `--format` options.
+- [x] **Phase 8 — Probenest Web Dashboard**: React + TypeScript + Vite + Tailwind CSS dashboard (`/`, `/evaluations`, `/redteam`, `/runs`, `/compare`, `/reports`), typed API client, score cards, severity badges, failure tables, regression alerts, responsive layout.
+- [x] **Phase 9 — Testing, CI & Reliability Hardening**: 100% offline pytest suite, pytest-cov coverage reporting, isolated test database fixtures (`conftest.py`), regression boundary & N/A safety tests, end-to-end integration pipeline test (`test_pipeline.py`), offline multi-job GitHub Actions CI.
 
 ---
 
 ## 3. Architecture
 
 ```text
-                        Target Application (Mock / DemoRAG)
-                                       ↓
-                                RedTeamRunner
-                                       ↓
-                         Adversarial Attack Cases
-               ┌───────────────┼───────────────┬───────────────┬───────────────┐
-               ↓               ↓               ↓               ↓               ↓
-        PromptInjection    Jailbreak     InstructionOverride  DataLeakage    ToolAbuse
-               │               │               │               │               │
-               └───────────────┼───────────────┴───────────────┴───────────────┘
-                               ↓
-                 RedTeamEvaluator (PASS = Resisted, FAIL = Succumbed)
-                               ↓
-                    RedTeamResult & Severity (LOW / MEDIUM / HIGH / CRITICAL)
-                               ↓
-                       SQLite DB Persistence
+Target Application (Mock / DemoRAG) ──→ Evaluation Core & Red-Team Engine
+                                                │
+                                                ↓
+                                          Score Engine
+                                                │
+                                                ↓
+                                        Regression Engine
+                                                │
+                                                ↓
+                                          Report Service
+                                         ┌──────┴──────┐
+                                         ↓             ↓
+                                       JSON        Markdown (schema_version = "1.0")
+                                         └──────┬──────┘
+                                                ↓
+                                      CLI & Web Dashboard
 ```
 
 ---
 
 ## 4. Tech Stack
 
-- **Backend**: Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2.x, SQLite, Scikit-Learn, Typer CLI
-- **Frontend**: React, TypeScript, Vite, Tailwind CSS
-- **Testing & Quality**: Pytest, Ruff, GitHub Actions CI
+- **Backend**: Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2.x, SQLite, Scikit-Learn, Typer CLI, Pytest-Cov, Ruff
+- **Frontend**: React, TypeScript, Vite, Tailwind CSS, Lucide Icons
+- **CI / Reliability**: GitHub Actions (100% offline test suite execution)
 
 ---
 
-## 5. Local Setup
+## 5. Quickstart & CLI Commands
 
 ```bash
-cp .env.example .env
-```
-
----
-
-## 6. Running Evaluation Pipelines
-
-### Quality Evaluation CLI
-
-```bash
-# Evaluate mock target
+# Quality evaluation
 probenest evaluate --target mock --evaluators quality
 
-# Evaluate DemoRAG target (with DemoRAG server running on port 8001)
-probenest evaluate --target demorrag --dataset datasets/golden/rag.json --evaluators quality
-```
-
-### Red-Team Evaluation CLI
-
-```bash
-# Run all red-team suites against mock target
+# Red-team adversarial audit
 probenest redteam --target mock
 
-# Run prompt injection suite against DemoRAG
-probenest redteam --target demorrag --category prompt_injection
+# View run score
+probenest score RUN_ID
+
+# Compare runs and detect regression (Exits 1 if regression detected)
+probenest compare BASELINE_ID CANDIDATE_ID
+
+# Generate comprehensive JSON and Markdown report files
+probenest report RUN_ID
 ```
 
 ---
 
-## 7. Running Backend & API
+## 6. Web Dashboard
 
 ```bash
-cd backend
-python -m pip install -e ".[dev]"
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+# Start backend server
+cd backend && uvicorn app.main:app --port 8000
+
+# Start frontend dev server
+cd frontend && npm run dev
 ```
 
-FastAPI docs available at `http://127.0.0.1:8000/docs`.
+Dashboard routes:
+- `/` — Overview & Top Scores
+- `/evaluations` — Quality Benchmarks
+- `/redteam` — Security Defense Audits
+- `/runs` — History Log
+- `/compare` — Run Comparison & Regression Alerts
+- `/reports` — JSON & Markdown Reports
 
 ---
 
-## 8. Running Tests
+## 7. Developer Pre-Push Checklist
+
+Before pushing changes:
 
 ```bash
-cd backend && python -m pytest && python -m ruff check .
-cd demo_target/demo_rag && python -m pytest && python -m ruff check .
+[ ] cd backend && python -m pytest --cov=app --cov-report=term-missing
+[ ] cd backend && python -m ruff check .
+[ ] cd demo_target/demo_rag && python -m pytest && python -m ruff check .
+[ ] cd frontend && npm run build
+[ ] git status (Verify .env is untracked)
 ```
-
----
-
-## 9. Development Roadmap
-
-- [x] **Phase 1: Foundation** (Project structure, FastAPI, SQLite DB, CLI, React UI shell)
-- [x] **Phase 2: Evaluation Core** (Domain abstractions, Target adapters, Evaluator interfaces, Runner engine, SQLite persistence, REST API, CLI evaluation)
-- [x] **Phase 3: DemoRAG Target Application** (Fictional reference RAG target application, document chunker, TF-IDF retriever, RAG pipeline, Probenest adapter)
-- [x] **Phase 4: Quality Evaluation Engine** (Accuracy, Relevance, Faithfulness, Hallucination evaluators, Mock & Ollama judge abstractions)
-- [x] **Phase 5: Adversarial Red-Team Engine** (Prompt Injection, Jailbreak, Instruction Override, Data Leakage, Tool Abuse evaluators, attack datasets, CLI & API red-teaming)
-- [ ] **Phase 6: Score Engine & Analytics** (Regression detection, Detailed metrics, Dashboard analytics)

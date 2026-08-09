@@ -1,9 +1,9 @@
-# Probenest Development Guide
+# Probenest Development & Testing Guide
 
 ## Prerequisites
 
-- **Python**: 3.11 or higher (Python 3.13 supported)
-- **Node.js**: v18 or higher (v22 recommended)
+- **Python**: 3.11 or higher
+- **Node.js**: v18 or higher (v20+ recommended)
 - **Git**: Installed and configured
 
 ---
@@ -46,85 +46,69 @@ FastAPI docs available at `http://127.0.0.1:8000/docs`.
 
 ---
 
-## Running Quality & Red-Team Evaluations
-
-### Quality Evaluation CLI
+## CLI Engineering Commands
 
 ```bash
+# Quality evaluation
 probenest evaluate --target mock --evaluators quality
-probenest evaluate --target demorrag --dataset datasets/golden/rag.json --evaluators quality
-```
 
-### Red-Team Evaluation CLI
-
-Run automated adversarial attack suites:
-
-```bash
-# Run all red-team suites against mock target
+# Red-team adversarial audit
 probenest redteam --target mock
 
-# Run prompt injection suite against DemoRAG
-probenest redteam --target demorrag --category prompt_injection
+# View run score
+probenest score RUN_ID
 
-# Run custom attack dataset
-probenest redteam --target demorrag --dataset datasets/redteam/injection.json
-```
+# Compare runs (exits 1 if regression detected)
+probenest compare BASELINE_ID CANDIDATE_ID
 
-Output format:
-
-```text
-PROBENEST RED-TEAM EVALUATION
-
-Target: demorrag
-
-Prompt Injection
-  5/5 defended
-  0 failures
-
-Instruction Override
-  3/3 defended
-  0 failures
-
-Jailbreak
-  8/8 defended
-  0 failures
-
-Data Leakage
-  8/8 defended
-  0 failures
-
-Tool Abuse
-  8/8 defended
-  0 failures
-
-TOTAL TESTS: 32
-FAILURES: 0
-High-risk failures: 0
+# Generate JSON v1.0 and Markdown reports
+probenest report RUN_ID
 ```
 
 ---
 
-## API Usage
-
-Trigger red-team evaluation via REST API:
+## Web Dashboard Development
 
 ```bash
-curl -X POST http://127.0.0.1:8000/api/v1/redteam \
-  -H "Content-Type: application/json" \
-  -d '{"target": "demorrag", "category": "prompt_injection"}'
+# Start backend server
+cd backend && uvicorn app.main:app --port 8000
+
+# Start frontend dev server
+cd frontend && npm run dev
 ```
 
 ---
 
-## Testing & Quality
+## Testing & CI
+
+All tests execute **100% offline** without requiring external LLM services or API keys.
 
 ```bash
-# Run backend tests
-cd backend && python -m pytest && python -m ruff check .
+# Backend pytest with coverage report
+cd backend
+python -m pytest --cov=app --cov-report=term-missing
 
-# Run DemoRAG tests
-cd demo_target/demo_rag && python -m pytest && python -m ruff check .
+# Backend ruff lint
+python -m ruff check .
 
-# Run frontend build
-cd frontend && npm run build
+# DemoRAG tests & ruff lint
+cd demo_target/demo_rag
+python -m pytest
+python -m ruff check .
+
+# Frontend TypeScript check & Vite build
+cd frontend
+npm run build
+```
+
+---
+
+## Pre-Push Developer Checklist
+
+```bash
+[ ] cd backend && python -m pytest --cov=app --cov-report=term-missing
+[ ] cd backend && python -m ruff check .
+[ ] cd demo_target/demo_rag && python -m pytest && python -m ruff check .
+[ ] cd frontend && npm run build
+[ ] git status (Confirm .env is untracked)
 ```

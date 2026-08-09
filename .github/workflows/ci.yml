@@ -8,7 +8,44 @@ on:
 
 jobs:
   backend-ci:
-    name: Backend Lint & Test
+    name: Backend Tests & Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Secret Safety (.env untracked)
+        run: |
+          TRACKED_ENV=$(git ls-files .env)
+          if [ -n "$TRACKED_ENV" ]; then
+            echo "ERROR: .env file is tracked by git!"
+            exit 1
+          fi
+          echo ".env file is untracked."
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          cd backend
+          pip install -e .[dev]
+
+      - name: Run Ruff Lint
+        run: |
+          cd backend
+          ruff check .
+
+      - name: Run Pytest Suite with Coverage
+        run: |
+          cd backend
+          pytest --cov=app --cov-report=term-missing
+
+  demorag-ci:
+    name: DemoRAG Target Checks
     runs-on: ubuntu-latest
 
     steps:
@@ -22,21 +59,21 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          cd backend
-          pip install -e .
+          cd demo_target/demo_rag
+          pip install -e .[dev]
 
       - name: Run Ruff Lint
         run: |
-          cd backend
+          cd demo_target/demo_rag
           ruff check .
 
-      - name: Run Tests
+      - name: Run DemoRAG Pytest Suite
         run: |
-          cd backend
+          cd demo_target/demo_rag
           pytest
 
   frontend-ci:
-    name: Frontend Build Check
+    name: Frontend Build & Typecheck
     runs-on: ubuntu-latest
 
     steps:

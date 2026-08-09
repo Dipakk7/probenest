@@ -18,6 +18,7 @@ class EvaluationRun(BaseModel):
     """Represents a complete evaluation run containing aggregate metrics and case results."""
 
     run_id: str = Field(description="Unique evaluation run identifier")
+    target: str = Field(default="demorrag", description="Target application name")
     started_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Run start timestamp")
     completed_at: datetime | None = Field(default=None, description="Run completion timestamp")
     status: RunStatus = Field(default=RunStatus.PENDING, description="Execution status")

@@ -92,7 +92,7 @@ class RegressionEngine:
                         TestFailureChange(
                             test_id=c_res.test_id,
                             category_or_evaluator=c_res.evaluator,
-                            severity=c_res.severity,
+                            severity=c_res.severity or "info",
                             description=f"Quality evaluator '{c_res.evaluator}' failed.",
                             change_type="new_failure",
                         )
@@ -102,7 +102,7 @@ class RegressionEngine:
                         TestFailureChange(
                             test_id=c_res.test_id,
                             category_or_evaluator=c_res.evaluator,
-                            severity=c_res.severity,
+                            severity=c_res.severity or "info",
                             description=f"Quality evaluator '{c_res.evaluator}' passed.",
                             change_type="fixed_failure",
                         )
@@ -112,8 +112,8 @@ class RegressionEngine:
                         TestFailureChange(
                             test_id=c_res.test_id,
                             category_or_evaluator=c_res.evaluator,
-                            severity=c_res.severity,
-                            description=f"Quality evaluator '{c_res.evaluator}' persistent failure.",
+                            severity=c_res.severity or "info",
+                            description=f"Quality evaluator '{c_res.evaluator}' failed persistently.",
                             change_type="persistent_failure",
                         )
                     )
