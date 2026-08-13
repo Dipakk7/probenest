@@ -11,7 +11,7 @@
 Most LLM evaluation tools ask one question: *"is the answer good?"*
 Probenest asks two: **"is the answer good?"** and **"can this system be broken?"**
 
-It evaluates AI applications for quality (accuracy, relevance, faithfulness, hallucination), stress-tests them against five adversarial attack categories (prompt injection, jailbreaks, instruction overrides, data leakage, tool abuse), computes a single deterministic reliability score, catches run-to-run regressions, and surfaces all of it through a CLI built for CI pipelines and a web dashboard built for humans.
+It evaluates AI applications for quality (accuracy, relevance, faithfulness, hallucination), stress-tests them against five adversarial attack categories (prompt injection, jailbreaks, instruction overrides, data leakage, tool abuse), computes a single deterministic reliability score, catches run-to-run regressions, and surfaces all of it through a CLI built for CI pipelines and a web dashboard built for humans
 
 ---
 
